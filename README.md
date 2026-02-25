@@ -46,7 +46,7 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
     ✅ One-Shot Mode ──────── Trigger-to-play, no looping
     ✅ LPG Envelope ───────── Buchla 292t on one-shots
     ✅ Tail Dampener ──────── Transient-preserving crossfader
-    ✅ Chord Grains ───────── Scale-based harmonic pitch stacking,
+    ✅ Chord Grains ───────── Scale-based harmonic pitch stacking
     ✅ Voice Detune ───────── Supersaw unison spread
     ✅ 5-Mode Filter ──────── LP / HP / Dual Peak / Crush / Comb
     ✅ Frequency Shifter ──── Hilbert-based bidirectional
