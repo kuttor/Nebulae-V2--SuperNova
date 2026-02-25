@@ -139,7 +139,7 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 ## Installation
 
 ```
-1.  Format USB drive as FAT32
+1.  Use a USB drive as FAT32
 2.  Copy  a_granularlooper.instr  to USB root directory
 3.  Insert USB into Nebulae v2
 4.  Power on (or hold File + tap Source to hot-reload)
