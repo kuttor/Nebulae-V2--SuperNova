@@ -39,29 +39,28 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 ## Feature Overview
 
 ```
- ┌─────────────────────────────────────────────────────────────┐
- │                    SUPERNOVA v0.8                           │
- │                                                             │
- │  ✅ Killswitch ─────────── Freeze = momentary mute          │
- │  ✅ One-Shot Mode ──────── Trigger-to-play, no looping      │
- │  ✅ LPG Envelope ───────── Buchla 292t on one-shots         │
- │  ✅ Tail Dampener ──────── Transient-preserving crossfader  │
- │  ✅ Chord Grains ───────── Maj7 harmonic pitch stacking     │
- │  ✅ Voice Detune ───────── Supersaw unison spread           │
- │  ✅ 5-Mode Filter ──────── LP / HP / Dual Peak / Crush / Comb│
- │  ✅ Frequency Shifter ──── Hilbert-based bidirectional      │
- │  ✅ Stereo Widener ─────── Haas delay + allpass decorrelation│
- │  ✅ Blend Reorder ──────── Live: Dry → Vocoder → Granular   │
- │                                                             │
- │  🔲 Absolute Start/End ── Independent start/end positions   │
- │  🔲 Gap Mode ───────────── Morphagene-style rhythmic gaps   │
- │  🔲 Turntable Mode ─────── CDJ jog wheel scrub             │
- │  🔲 Reverb ─────────────── Shimmer + saturation             │
- │  🔲 Strum ──────────────── Grain timing distribution        │
- │  🔲 Beat Slicing ───────── Rhythmic buffer chopping         │
- │                                                             │
- │  ✅ = implemented   🔲 = planned                            │
- └─────────────────────────────────────────────────────────────┘
+  ───────────────────────────────────────────────────────────────
+                        SUPERNOVA v0.8                             
+                                                        
+    ✅ Killswitch ─────────── Freeze = momentary mute
+    ✅ One-Shot Mode ──────── Trigger-to-play, no looping
+    ✅ LPG Envelope ───────── Buchla 292t on one-shots
+    ✅ Tail Dampener ──────── Transient-preserving crossfader
+    ✅ Chord Grains ───────── Maj7 harmonic pitch stacking
+    ✅ Voice Detune ───────── Supersaw unison spread
+    ✅ 5-Mode Filter ──────── LP / HP / Dual Peak / Crush / Comb
+    ✅ Frequency Shifter ──── Hilbert-based bidirectional
+    ✅ Stereo Widener ─────── Haas delay + allpass decorrelation
+    ✅ Blend Reorder ──────── Live: Dry → Vocoder → Granular 
+    🔲 Absolute Start/End ── Independent start/end positions     
+    🔲 Gap Mode ───────────── Morphagene-style rhythmic gaps     
+    🔲 Turntable Mode ─────── CDJ jog wheel scrub                
+    🔲 Reverb ─────────────── Shimmer + saturation              
+    🔲 Strum ──────────────── Grain timing distribution          
+    🔲 Beat Slicing ───────── Rhythmic buffer chopping           
+                                                                 
+    ✅ = implemented   🔲 = planned
+  ─────────────────────────────────────────────────────────────
 ```
 
 ---
@@ -81,14 +80,14 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
                     └───┬───────────────┬───┘
                         │               │
               ┌─────────▼──────┐ ┌──────▼─────────┐
-              │  PHASE VOCODER │ │    GRANULAR     │
-              │    (mincer)    │ │  (partikkel)    │
-              │                │ │                 │
-              │  pitch-shift   │ │  density        │
-              │  time-stretch  │ │  overlap        │
-              │                │ │  chord grains   │
-              │                │ │  voice detune   │
-              └────────┬───────┘ └────────┬────────┘
+              │  PHASE VOCODER │ │    GRANULAR    │
+              │    (mincer)    │ │  (partikkel)   │
+              │                │ │                │
+              │  pitch-shift   │ │  density       │
+              │  time-stretch  │ │  overlap       │
+              │                │ │  chord grains  │
+              │                │ │  voice detune  │
+              └────────┬───────┘ └────────┬───────┘
                        │                  │
                        │    ┌─────────┐   │
                        └───►│  BLEND  │◄──┘
@@ -164,7 +163,7 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
   │                                                              │
   │    START ●                              ● SIZE               │
   │    Loop start offset     SPEED ◉        Relative loop size   │
-  │    (stock behavior)    ← x4  x1  x4 →  (stock behavior)     │
+  │    (stock behavior)    ← x4  x1  x4 →  (stock behavior)      │
   │                                                              │
   │    DENSITY ●                            ● OVERLAP            │
   │    Grain rate            PITCH ◉        Grain size           │
