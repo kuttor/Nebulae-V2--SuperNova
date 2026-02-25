@@ -3,11 +3,16 @@ ksmps,64
 -B,2048
 -b,512
 sr,48000
-freeze,latching,rising
+freeze,momentary,state
 reset,triggered,rising
 source,latching,falling
 file,incremental,falling
 record,latching,rising
+blend_alt,0.5
+window_alt,0
+overlap_alt,0
+loopsize_alt,0
+density_alt,0
 nebconfigend
 
 ;previous settings:
@@ -27,8 +32,7 @@ nebconfigend
 ; gkpitch - percentage of original pitch. (Negative values allowed)
 ; gkspeed - percentage of original speed. (Negative values allowed)
 ; gkloopstart - percentage of file to start at.
-; gkloopsize - absolute end point of loop
-; gkloopend - absolute end point of loop
+; gkloopsize - percentage of post-loopstart size file to play
 ; gkdensity - 
 ; gkoverlap - 
 ; gkblend - percentage of granular sound (inverse percentage of dry audio file)
@@ -206,6 +210,7 @@ giWin		ftgen	0, 0, giwindowtablesize, 20, 9, 1 ; Hamming Window
 giWinB		ftgen	0, 0, giwindowtablesize, 20, 9, 1 ; Hamming Window 
 giWinMix	ftgen	0, 0, giwindowtablesize, 20, 9, 1 ; Hamming Window 
 giCosine	ftgen	0, 0, 8193, 9, 1, 1, 90 ; Cosine Table
+giSine		ftgen	0, 0, 8193, 10, 1       ; Sine Table (for freq shifter)
 giSquare    ftgen   0, 0, 2048, 7, 1.0, 1023, 1.0, 1, 0.0
 giLine10    ftgen   0, 0, 2048, 7, 0, 2048, 10.0
 giLine1     ftgen   0, 0, 2048, 7, 0, 2048, 1
@@ -216,6 +221,56 @@ giPanAllL   ftgen   0, 0, 256, -24, giPanL, 0.0, 1.0
 giPanAllR   ftgen   0, 0, 256, -24, giPanR, 0.0, 1.0
 giPanMixL   ftgen   0, 0, 256, -24, giPanL, 0.0, 0.0
 giPanMixR   ftgen   0, 0, 256, -24, giPanR, 0.0, 0.0
+
+; =====================================================================
+; SUPERNOVA: Formant filter vowel frequency tables (Hillenbrand male)
+; 5 vowels: a(730) e(660) i(570) o(300) u(640) — F1 frequencies
+; tablei interpolation gives smooth morph between adjacent vowels.
+; =====================================================================
+giFormF1 ftgen 0, 0, 8, -2, 730, 660, 570, 300, 640
+giFormF2 ftgen 0, 0, 8, -2, 1090, 1720, 840, 870, 1190
+giFormF3 ftgen 0, 0, 8, -2, 2440, 2410, 2410, 2240, 2390
+
+; =====================================================================
+; SUPERNOVA: Strum distribution tables (Source+Density grain timing)
+; StrumDown: exponential ramp 0→10 — grains cluster toward END of period
+;   (slow start, fast end — like picking down from low to high string)
+; StrumUp: exponential ramp 10→0 — grains cluster toward START of period
+;   (fast start, slow end — like picking up from high to low string)
+; StrumDist: live-blended table used by partikkel as idisttab
+; =====================================================================
+giStrumDown ftgen 0, 0, 2048, 7, 0, 1024, 0.5, 512, 2.0, 256, 5.0, 256, 10.0
+giStrumUp  ftgen 0, 0, 2048, 7, 10.0, 256, 5.0, 256, 2.0, 512, 0.5, 1024, 0
+giStrumDist ftgen 0, 0, 2048, 7, 0, 2048, 10.0
+giChordMix  ftgen 0, 0, 8, -2, 0.25, 0.25, 0.25, 0.25, 0 ; Chord voice mix (updated k-rate)
+
+; =====================================================================
+; SUPERNOVA: HilbertIIR UDO — Manual Hilbert transform via biquad
+; biquad confirmed available (used in factory World of Echo instrument).
+; Niemitalo coefficients: 2x4 second-order allpass sections.
+; Allpass: H(z) = (c - z^-2) / (1 - c*z^-2) → biquad ain, c, 0, -1, 1, 0, -c
+; 1-sample delay on Chain 1 via biquad ain, 0, 1, 0, 1, 0, 0
+; =====================================================================
+opcode HilbertIIR, aa, a
+  ain xin
+
+  ; Chain 1 (I channel): 4 cascaded second-order allpass
+  a1_1 biquad ain,  0.47940086558884, 0, -1, 1, 0, -0.47940086558884
+  a1_2 biquad a1_1, 0.87621849353931, 0, -1, 1, 0, -0.87621849353931
+  a1_3 biquad a1_2, 0.97659758950819, 0, -1, 1, 0, -0.97659758950819
+  a1_4 biquad a1_3, 0.99749925593555, 0, -1, 1, 0, -0.99749925593555
+
+  ; 1-sample delay on Chain 1 (critical for quadrature accuracy)
+  aI biquad a1_4, 0, 1, 0, 1, 0, 0
+
+  ; Chain 2 (Q channel): 4 cascaded second-order allpass
+  a2_1 biquad ain,  0.16175849836770, 0, -1, 1, 0, -0.16175849836770
+  a2_2 biquad a2_1, 0.73302893234149, 0, -1, 1, 0, -0.73302893234149
+  a2_3 biquad a2_2, 0.94534970032911, 0, -1, 1, 0, -0.94534970032911
+  aQ   biquad a2_3, 0.99059915668453, 0, -1, 1, 0, -0.99059915668453
+
+  xout aI, aQ
+endop
 
 instr 1
 
@@ -235,7 +290,6 @@ krecordedbuff init giMaxRecordBuffer
 kBufferEmpty init 1
 kcopyingbuffer init 0
 kprevsize init 0
-kloopend init 0
 aoutl init 0
 aoutr init 0
 arecL init 0
@@ -246,6 +300,23 @@ aprevmixl init 0
 aprevmixr init 0
 arecordsync init 0
 kActiveBuffer init 0
+; =====================================================================
+; SUPERNOVA MOD: Play Mode state (Source+Freeze 2-way toggle)
+; kPlayMode: 0=Normal looping, 1=One-shot
+; Each press of Source+Freeze toggles: 0→1→0
+; One-shot: plays once on trigger, then mutes until next trigger
+; =====================================================================
+kPlayMode init 0
+kOneShotPlaying init 0
+kOneShotDelay init 0
+kOneShotSrcTrig init 0
+kPrevFrzAlt init 0
+; =====================================================================
+; SUPERNOVA MOD: Multi-Type Filter state
+; 5 types: LP(0), HP(1), Dual Peak(2), Bitcrusher(3), Comb±(4)
+; Cycled via Source+Reset tap (forward only, wraps at 4→0)
+; =====================================================================
+kFilterType init 0
 ; generates right channel ftables for stereo files
 gifile_right_offset = 599
 itempidx = 0
@@ -281,9 +352,9 @@ endif
 if gkloopstart > 0.995 then
 gkloopstart = 1
 endif
-; if gkloopsize < gkloopstart then
-; gkloopsize = gkloopstart
-; endif
+if gkloopsize < 0.0015 then
+gkloopsize = 0
+endif
 if gkloopsize > 0.995 then
 gkloopsize = 1
 endif
@@ -292,7 +363,6 @@ gkblend = 0.0
 elseif gkblend > 0.99 then
 gkblend = 1.0
 endif
-
 ;;;;;;;;;;;;;;;;;;;
 ;; phasor config ;;
 ;;;;;;;;;;;;;;;;;;;
@@ -326,68 +396,12 @@ if klen == 0 then
     klen = giMaxRecordBuffer
 endif
 kconvertedlen = (klen * (kfilesr / sr))
-
-; kloopstart = (gkloopstart * kconvertedlen)
-; kloopscalar = gkloopsize
-; kloopsize = ((kloopscalar * kloopscalar) * (kconvertedlen-kloopstart))
-; if (kloopsize <= 0.000035) then 
-;	kloopsize = 0.000035
-; endif
-
-; -----------------------------------------------------------------------------
-; change by kuttor
-; New loop size calculation for more control over the size of the loop.
-; Size controls absolute end point 
-; Start controls absolute start point
-
-; Absolute start and end (seconds)
-kloopstart = gkloopstart * kconvertedlen
-kloopend   = gkloopsize  * kconvertedlen
-
-; --- Gap mode detection (Size passed Start) ---
-kGapMode = (kloopend <= kloopstart ? 1 : 0)
-
-; Clamp to buffer
-if kloopstart < 0 then
-    kloopstart = 0
+kloopstart = (gkloopstart * kconvertedlen)
+kloopscalar = gkloopsize
+kloopsize = ((kloopscalar * kloopscalar) * (kconvertedlen-kloopstart))
+if (kloopsize <= 0.000035) then 
+	kloopsize = 0.000035
 endif
-if kloopend > kconvertedlen then
-    kloopend = kconvertedlen
-endif
-
-; If end comes before start, clamp end to start + epsilon (normal mode only)
-if kGapMode == 0 then
-    if kloopend <= kloopstart then
-        kloopend = kloopstart + 0.000035
-    endif
-endif
-
-; --- Fixed clamp window for gap mode ---
-kClampWin = 0.04   ; 40 ms
-if kGapMode == 1 then
-    kloopend = kloopstart + kClampWin
-endif
-
-; --- Gap length (seconds) ---
-kGapLen = 0
-if kGapMode == 1 then
-    kGapRaw = max(0, kloopstart - (gkloopsize * kconvertedlen))
-    kGapLen = 0.5 * (kGapRaw * kGapRaw) / kconvertedlen
-endif
-
-; Audible window length
-kAudibleLen = kClampWin
-
-; Total loop period = sound + silence
-kLoopPeriod = kAudibleLen + kGapLen
-
-if kGapMode == 1 then
-    kloopsize = kLoopPeriod
-else
-    kloopsize = kloopend - kloopstart
-endif
-
-; -----------------------------------------------------------------------------
 
 ; Set Speed
 if gkrecord == 0 || gkrecord_alt == 1 then
@@ -401,59 +415,39 @@ if abs(kspeed) <= 1.025 && abs(kspeed) >= 0.975 then
     endif
 endif
 
-; Set Freeze
-if (gkfreeze == 1) then
-	kspeed = 0.0
-endif
+; SUPERNOVA MOD: Spectral freeze removed — gkfreeze repurposed as killswitch
+; Freeze button is now momentary mute (Buckethead-style killswitch).
+; Original behavior: if (gkfreeze == 1) then kspeed = 0.0
 
 
 ainl, ainr inch 1, 2
+; gkblend_alt now used for frequency shifter (Source+Blend)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; mincer/partikkel primary controls ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; pitch setting
+; SUPERNOVA MOD: 2ms portk rejects single-k-period glitches from Python control layer.
+; Without this, v/oct CV + encoder summing in Python can cause brief pitch spikes
+; at loop boundaries when gkeol triggers a control update cycle.
 ilogmax = log(32.00)
 ilogmin = log(1.0)
-kfactor = exp(gkpitch * (ilogmax - ilogmin) + ilogmin)
+kpitchSmooth portk gkpitch, 0.002
+kfactor = exp(kpitchSmooth * (ilogmax - ilogmin) + ilogmin)
 kpitch = 0.125 * kfactor
 if kpitch <= 1.005 && kpitch >= 0.995 then
 kpitch = 1.0
 endif
 
-; Window Shape
-kwindow portk gkwindow, 0.1
-kwindowsel = int(kwindow * 6)
-kwindowblend = kwindow * 6
-kwindowchanged changed kwindowsel
-if kwindowchanged == 1 || kfirsttime == 1 then
-    if kwindowsel < 1  then
-        tablecopy giWin, giGaussian
-        tablecopy giWinB, giBlkHarris
-    elseif kwindowsel < 2 then
-        tablecopy giWin, giBlkHarris
-        tablecopy giWinB, giRampDown
-    elseif kwindowsel < 3 then
-        tablecopy giWin, giRampDown
-        tablecopy giWinB, giBartlett
-    elseif kwindowsel < 4 then
-        tablecopy giWin, giBartlett
-        tablecopy giWinB, giRampUp
-    elseif kwindowsel < 5 then
-        tablecopy giWin, giRampUp
-        tablecopy giWinB, giHamming
-    elseif kwindowsel < 6 then
-        tablecopy giWin, giHamming
-        tablecopy giWinB, giRectangle
-    elseif kwindowsel < 7 then
-        tablecopy giWin, giRectangle
-    endif
+; SUPERNOVA MOD: Grain window locked to Gaussian.
+; gkwindow repurposed as DJ filter cutoff (see filter block near output).
+; Original code morphed between 7 window shapes — now permanently Gaussian.
+if kfirsttime == 1 then
+    tablecopy giWin, giGaussian
+    tablecopy giWinB, giGaussian
+    tablecopy giWinMix, giGaussian
     kfirsttime = 0
 endif
-
-; Window Blend
-kwblend = kwindowblend - kwindowsel
-tablemix giWinMix, 0, giwindowtablesize, giWin, 0, 1.0-kwblend, giWinB, 0, kwblend
 
 ; Density and Overlap
 ilogmaxgfreq = log(2500.0)
@@ -462,7 +456,12 @@ ilogmingfreq = log(0.12)
 kdensityscalartan = ((tanh((gkdensity * 2.0) - 1.0)) + 0.8) * 0.4
 kdensityscalarcube = ((((gkdensity * 2.0) - 1.0) ^ 3) + 1.0) * 0.5
 kdensityscalar = (kdensityscalartan * 0.25) + (kdensityscalarcube * 0.75)
-if gkdensity > 0.05 || gkfreeze_alt == 0 then
+; SUPERNOVA FIX: Original code used gkfreeze_alt to gate grain generation
+; for external grain triggering. Since we repurposed Source+Freeze for
+; play mode cycling, gkfreeze_alt alternates 0/1 independently of kPlayMode.
+; After 3 presses (return to normal), gkfreeze_alt=1 would kill grains at
+; low density. Now density < 5% → no grains regardless of mode.
+if gkdensity > 0.05 then
     kgrainfreq = exp((kdensityscalar) * (ilogmaxgfreq - ilogmingfreq) + ilogmingfreq)
 else
     kgrainfreq = 0
@@ -473,13 +472,11 @@ if (kgrainfreq < 4) then
 else
     kmaxgrainpw = 6.0
 endif
-if (gkoverlap_alt < 0.01) then
-    krandsizel = 0.0
-    krandsizer = 0.0
-else
-    krandsizel = (birnd(gkoverlap_alt * gkoverlap_alt)) 
-    krandsizer = (birnd(gkoverlap_alt * gkoverlap_alt))
-endif
+; SUPERNOVA MOD: gkoverlap_alt repurposed as Tail Dampener (Source+Overlap).
+; Original code: random grain size deviation from gkoverlap_alt.
+; krandsizel/krandsizer permanently 0 (no random grain size).
+krandsizel = 0.0
+krandsizer = 0.0
 kgsizescalarL = krandsizel + (gkoverlap * gkoverlap)
 kgsizescalarR = krandsizer + (gkoverlap * gkoverlap)
 if kgsizescalarL > 1.0 then
@@ -495,10 +492,43 @@ endif
 
 kgrainsync init 1
 
-if gkfreeze_alt == 1 then
-    kgrainsync trigger gksourcegate, 0.5, 0
+; =====================================================================
+; SUPERNOVA MOD: 3-mode play cycle (Source+Freeze)
+; ORIGINAL CODE:
+;   if gkfreeze_alt == 1 then
+;       kgrainsync trigger gksourcegate, 0.5, 0
+;   else
+;       kgrainsync = 0
+;   endif
+;
+; NEW: Source+Freeze toggles between 2 modes:
+;   kPlayMode 0 = Normal looping (default)
+;   kPlayMode 1 = One-shot playthrough (trigger to play once)
+; Each toggle of gkfreeze_alt flips the mode.
+; =====================================================================
+kFrzAltChanged changed gkfreeze_alt
+if kFrzAltChanged == 1 then
+    if kPlayMode == 0 then
+        kPlayMode = 1
+    else
+        kPlayMode = 0
+    endif
+    ; Reset state on mode change — prevents stale kOneShotPlaying
+    kOneShotPlaying = 0
+endif
+
+; One-shot triggers (mode 1)
+if kPlayMode == 1 then
+    kOneShotSrcTrig trigger gksourcegate, 0.5, 0
+    kOneShotRstTrig trigger gkreset, 0.5, 0
+    if kOneShotSrcTrig == 1 || kOneShotRstTrig == 1 then
+        kOneShotPlaying = 1
+        kOneShotDelay = 4
+    endif
+    kgrainsync = 0
 else
     kgrainsync = 0
+    kOneShotPlaying = 0
 endif
 
 ;* If we decide we need to handle grain size based on incoming grain rate.
@@ -546,7 +576,9 @@ endif
 
 
 ; Prep Pan table
-kpanamount = gkloopsize_alt 
+; SUPERNOVA: gkloopsize_alt repurposed as freq shifter stereo width (Source+Size).
+; Grain panning disabled (fixed at center/no pan).
+kpanamount = 0
 kpanchanged changed kpanamount
 if kpanchanged == 1 then
     tablemix giPanMixL, 0, 256, giPanNone, 0, 1.0-kpanamount, giPanAllL, 0, kpanamount
@@ -557,14 +589,83 @@ if kpanchanged == 1 then
     tablew 254, 1, giPanMixR
 endif
 
-; Random Pitch
-;krandpitchamt = gkloopstart_alt
-krandpitchamt = gkpitch_alt
-krndpitchmod rand (krandpitchamt * 1200)
+; =====================================================================
+; SUPERNOVA MOD: Structured Chord Grains (replaces random pitch)
+; Source+Pitch (gkpitch_alt) = progressive chord stacking:
+;   CCW (0.0): root only — all 4 partikkel voices at unison
+;   Noon (0.5): root + perfect 5th — voice 2 spreads to interval
+;   CW (1.0): root + 5th + 3rd + 7th — full chord, all voices spread
+; Chord quality fixed at Major 7th: P5(7st), M3(4st), M7(11st)
+; Implementation: kwavekey1-4 crossfade from unison(1.0) to chord ratios.
+; At gkpitch_alt=0, all keys=1 → identical to original unison behavior.
+; No amp table changes, no CPU increase, no level discontinuities.
+; =====================================================================
+krndpitchmod = 0 ; Random pitch disabled — chord grains replace it
 
-; Set a lot of parameters for Partikkel
-kdistribution	= gkdensity_alt * gkdensity_alt * 100; periodic grain distribution
-idisttab	= giLine10 ; (default) flat distribution used for grain distribution
+kChordAmt = gkpitch_alt
+; Progressive stacking amounts: 5th first, then 3rd, then 7th
+; Voice 2 (5th): fades in 0.0→0.5
+kAmt5th = kChordAmt * 2
+if kAmt5th > 1 then
+    kAmt5th = 1
+endif
+; Voice 3 (3rd): fades in 0.5→0.75
+kAmt3rd = (kChordAmt - 0.5) * 4
+if kAmt3rd < 0 then
+    kAmt3rd = 0
+endif
+if kAmt3rd > 1 then
+    kAmt3rd = 1
+endif
+; Voice 4 (7th): fades in 0.75→1.0
+kAmt7th = (kChordAmt - 0.75) * 4
+if kAmt7th < 0 then
+    kAmt7th = 0
+endif
+if kAmt7th > 1 then
+    kAmt7th = 1
+endif
+
+; Fixed chord quality: Major 7th — P5(7st), M3(4st), M7(11st)
+kInt5th = 7
+kInt3rd = 4
+kInt7th = 11
+
+; Convert semitone intervals to pitch ratios
+; ratio = 2^(semitones/12)
+kRatio5th = 2 ^ (kInt5th / 12.0)
+kRatio3rd = 2 ^ (kInt3rd / 12.0)
+kRatio7th = 2 ^ (kInt7th / 12.0)
+
+; Dynamic chord voice amplitudes via giChordMix table
+; All 4 voices always at equal 0.25 amplitude (matches old iwaveamptab=-1)
+; Volume is CONSTANT — chord effect is purely pitch-based via kwavekey1-4.
+; When chord off: all 4 voices at pitch 1.0 = unison (same as before)
+; When chord on: voices spread to intervals, amplitude unchanged = no volume dip
+tablew 0.25, 0, giChordMix  ; voice 1 (root)
+tablew 0.25, 1, giChordMix  ; voice 2 (→5th)
+tablew 0.25, 2, giChordMix  ; voice 3 (→3rd)
+tablew 0.25, 3, giChordMix  ; voice 4 (→7th)
+tablew 0, 4, giChordMix     ; trainlet always off
+
+; =====================================================================
+; SUPERNOVA MOD: Voice Detune (Source+Density = per-voice pitch spread)
+; gkdensity_alt controls random detune spread per chord voice:
+;   CCW(0) = tight unison, no detune (clean, original behavior)
+;   CW(1) = wide detune ±50 cents per voice (super-saw, thick, lush)
+; Each voice gets slow, independent random pitch drift.
+; Stacks with chord intervals from Source+Pitch — detuned chords = thicc.
+; When chord is off (all unison), detune alone = supersaw unison texture.
+; =====================================================================
+kDetuneCents = gkdensity_alt * 50  ; 0→50 cents max spread
+; Independent slow drift per voice (different rates = organic movement)
+kDet2 randi kDetuneCents, 1.7
+kDet3 randi kDetuneCents, 2.3
+kDet4 randi kDetuneCents, 1.1
+
+; Grain distribution: periodic (no strum)
+kdistribution = 0
+idisttab = giLine10  ; flat distribution (default)
 ;async		= 0				; no sync input
 async upsamp kgrainsync
 async2 init 0
@@ -586,21 +687,22 @@ kTrainCps	= 1				; grain rate for single-cycle trainlet in each grain
 knumpartials	= 1			; number of partials in trainlet
 kchroma		= 1				; balance of partials in trainlet
 krandommask	= 0				; no random grain masking
-if gkwindow_alt < 0.01 then
-	krandommask = 0
-else
-	krandommask = gkwindow_alt * 0.99
-endif
-iwaveamptab	= -1			; mix of all 4 sourcve waveforms and no amp for trainlets
+; SUPERNOVA MOD: gkwindow_alt repurposed as filter resonance.
+; Original code: grain muting probability from gkwindow_alt.
+; krandommask permanently 0 (no grain muting).
+iwaveamptab	= giChordMix	; chord voice mix table (dynamic, updated at k-rate)
 krandposscalar = (gkloopstart_alt * gkloopstart_alt)
 krandpos = birnd(krandposscalar)
 
-kwavekey1	= 1				; original key for source waveform
-kwavekey2	= 1 
-kwavekey3	= 1 
-kwavekey4	= 1 
+; Chord grain pitch ratios + per-voice detune
+; At kChordAmt=0 + kDetune=0: all keys=1.0 (original unison behavior)
+; Chord spreads voices to intervals, detune adds organic drift on top
+kwavekey1	= 1				; root — always unison, no detune
+kwavekey2	= (1 + ((kRatio5th - 1) * kAmt5th)) * cent(kDet2)
+kwavekey3	= (1 + ((kRatio3rd - 1) * kAmt3rd)) * cent(kDet3)
+kwavekey4	= (1 + ((kRatio7th - 1) * kAmt7th)) * cent(kDet4)
 ;imax_grains	= 25			; max grains per k period
-imax_grains = 10 ; this doesn't underrun on my unit
+imax_grains = 20 ; bumped from 10 for super grain / chord density
 
 ; Set a few parameters for mincer
 kphaselock = 1
@@ -667,24 +769,30 @@ if gksource == 1 then
 endif
 ;asynctrig += arecordtrig
 
-if kloopsize < 0.000035 then
-    kloopsize = 0.000035
+; =====================================================================
+; SUPERNOVA MOD: Play mode phasor routing
+; Mode 0 (Normal): standard syncphasor looping
+; Mode 1 (One-shot): source gate resets phasor, plays once
+; =====================================================================
+if kPlayMode == 1 then
+    asynctrig += a(kOneShotSrcTrig)
 endif
 
 kphasorfreq = ((1 / kloopsize) * kspeed) * (kfilesr / sr)
-
-aphs, aphssync syncphasor kphasorfreq, asynctrig, 0.0000
-
-if kGapMode == 1 then
-    atime = kloopstart + (kAudibleLen * aphs)
-else
-    atime = kloopstart + (kloopsize * aphs)
+if kphasorfreq > sr then
+    kphasorfreq = sr
+endif
+; =====================================================================
+; SUPERNOVA MOD: One-shot freeze — phasor stops when idle
+; =====================================================================
+if kPlayMode == 1 && kOneShotPlaying == 0 then
+    kphasorfreq = 0
 endif
 
-;if gksource == 1 then
-    ;atime *= 0.99
-;endif
-agphs = atime / (kglen * (kfilesr / sr)) ; Compensate for SR difference
+; Normal and One-shot: use syncphasor
+aphs, aphssync syncphasor kphasorfreq, asynctrig, 0.0000
+atime = kloopstart + (kloopsize * aphs)
+agphs = atime / (kglen * (kfilesr / sr))
 
 ;printks "startctrl: %f\tscalarctrl: %f\tstarttime: %f\tsize: %f\tconvertedlen: %f\tlength: %f\tphase: %f\ttime: %f\tbuff size: %f\n", 0.25, gkloopstart, gkloopsize, kloopstart, kloopsize, kconvertedlen, klen, k(aphs), k(atime), kbuffsize
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -715,7 +823,7 @@ else
                 if kspeed == 0 then
                     krecend = giMaxRecordBuffer
                 else
-                    krecend = kloopend / abs(kspeed)
+                    krecend = (kloopsize + kloopstart) / abs(kspeed)
                 endif
             else
                 krecend = giMaxRecordBuffer
@@ -807,94 +915,38 @@ endif
 
 ;printks "kbuffsize: %f\t krecordedbuff: %f\tkglen: %f\tklen: %f\tkloopscalar: %f\tkloopstart: %f\n",0.1, kbuffsize, krecordedbuff, kglen, klen, kloopscalar, kloopstart
 gkrecordstatus = krecordB
-
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;; processing ;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;
 
-; if gkloopstart_alt < 0.01 then
-; 	asamplepos1 = agphs
-; 	asamplepos2 = agphs
-; 	asamplepos3 = agphs
-; 	asamplepos4 = agphs ;random klow, khigh
-; else
-;     if gksource == 1 then
-;         krandposlivescalar = ((krecordedbuff) / giMaxRecordBuffer) 
-;         krandpos *= krandposlivescalar
-; 	    asamplepos1 = abs(agphs + krandpos)
-;         kgrainscalar = (kloopsize / kconvertedlen) * krandposlivescalar
-;         if k(asamplepos1) > (krandposlivescalar) then
-;             asamplepos1 -= krandposlivescalar
-;         endif
-;     else
-; 	    asamplepos1 = abs(agphs + krandpos)
-;         if k(asamplepos1) > (kloopend / kconvertedlen) then
-;             asamplepos1 = kloopstart / kconvertedlen
-;         endif
-;     endif
-; 	asamplepos2 = asamplepos1
-; 	asamplepos3 = asamplepos1
-; 	asamplepos4 = asamplepos1
-; endif
+; =====================================================================
+; Processing chain: mincer (phase vocoder) + partikkel (granular)
+; =====================================================================
 
-; -----------------------------------------------------------------------------
-; reworked processing logic to allow more control over the grain read position 
-; ~ kuttor
-
-; --- GAP MODE: Pin grain read position to slice region ---
-if kGapMode == 1 then
-    ; Slice position as normalized 0-1 over grain table
-    kSliceStartNorm = kloopstart / (kglen * (kfilesr / sr))
-    kSliceWidthNorm = kClampWin / (kglen * (kfilesr / sr))
-    kSliceCenterNorm = kSliceStartNorm + (kSliceWidthNorm * 0.5)
-    
-    if gkloopstart_alt < 0.01 then
-        ; No random - grains read from slice center
-        asamplepos1 = kSliceCenterNorm
-    else
-        ; Random spread WITHIN the slice only
-        kSliceRand = birnd(0.5) * kSliceWidthNorm * gkloopstart_alt
-        asamplepos1 = kSliceCenterNorm + kSliceRand
-        ; Clamp to slice bounds
-        if k(asamplepos1) < kSliceStartNorm then
-            asamplepos1 = kSliceStartNorm
-        endif
-        if k(asamplepos1) > (kSliceStartNorm + kSliceWidthNorm) then
-            asamplepos1 = kSliceStartNorm + kSliceWidthNorm
-        endif
-    endif
-    asamplepos2 = asamplepos1
-    asamplepos3 = asamplepos1
-    asamplepos4 = asamplepos1
+if gkloopstart_alt < 0.01 then
+	asamplepos1 = agphs
+	asamplepos2 = agphs
+	asamplepos3 = agphs
+	asamplepos4 = agphs ;random klow, khigh
 else
-    ; --- NORMAL MODE: Original logic ---
-    if gkloopstart_alt < 0.01 then
-        asamplepos1 = agphs
-        asamplepos2 = agphs
-        asamplepos3 = agphs
-        asamplepos4 = agphs
-    else
-        if gksource == 1 then
-            krandposlivescalar = ((krecordedbuff) / giMaxRecordBuffer) 
-            krandpos *= krandposlivescalar
-            asamplepos1 = abs(agphs + krandpos)
-            kgrainscalar = (kloopsize / kconvertedlen) * krandposlivescalar
-            if k(asamplepos1) > (krandposlivescalar) then
-                asamplepos1 -= krandposlivescalar
-            endif
-        else
-            asamplepos1 = abs(agphs + krandpos)
-            if k(asamplepos1) > (kloopend / kconvertedlen) then
-                asamplepos1 = kloopstart / kconvertedlen
-            endif
+    if gksource == 1 then
+        krandposlivescalar = ((krecordedbuff) / giMaxRecordBuffer) 
+        krandpos *= krandposlivescalar
+	    asamplepos1 = abs(agphs + krandpos)
+        kgrainscalar = kloopscalar * krandposlivescalar
+        if k(asamplepos1) > (krandposlivescalar) then
+            asamplepos1 -= krandposlivescalar
         endif
-        asamplepos2 = asamplepos1
-        asamplepos3 = asamplepos1
-        asamplepos4 = asamplepos1
+    else
+	    asamplepos1 = abs(agphs + krandpos)
+        if k(asamplepos1) > (gkloopstart + kloopscalar) then
+            asamplepos1 -= kloopscalar
+        endif
     endif
+	asamplepos2 = asamplepos1
+	asamplepos3 = asamplepos1
+	asamplepos4 = asamplepos1
 endif
-; -----------------------------------------------------------------------------
-
 
 if gksource == 1 then
     kwavfreq	= ((1/kglen)*kpitch) * cent(krndpitchmod); fundamental frequency of source waveform
@@ -939,13 +991,9 @@ else
         kwaveformR = kwaveformL
         asigR = asigL
     endif 
-		if gkblend_alt < 0.01 then
-			awavfml = 0
-			awavfmr = 0
-		else
-			awavfml = gkblend_alt * ainl
-			awavfmr = gkblend_alt * ainr
-		endif
+		; SUPERNOVA: Grain FM disabled — gkblend_alt repurposed as frequency shifter.
+		awavfml = 0
+		awavfmr = 0
     agrainLL, agrainLR partikkel kgrainfreq, kdistribution, idisttab, async, kenv2amt, ienv2tab, \
             ienv_attack, ienv_decay, ksustain_amount, ka_d_ratio, kgrainsizel, iamp, igainmasks, \
             kwavfreq, ksweepshape, iwavfreqstarttab, iwavfreqendtab, awavfml, \
@@ -1023,17 +1071,24 @@ if gksource == 1 then
 endif
 ablend interp kblend
 if gksource == 1 then
-    ablenddryfactor = abs((ablend * 4.0) - 2.0) - 1.0
-    ablenddryfactor min ablenddryfactor, a(1.0)
-    ablenddryfactor max ablenddryfactor, a(-1.0)
-    ablendvocfactor min ((ablend * 4.0) - 1.0), a(1.0)
-    ablendgrainfactor max ((ablend * 4.0) - 3.0), a(-1.0)
-    ablendvocoder = sqrt(0.5 * (1 - ablendvocfactor))
-    ablendgranular = sqrt(0.5 * (1 + ablendgrainfactor))
+    ; SUPERNOVA MOD: Alex Tribido blend reorder for live mode.
+    ; Original: CCW=Vocoder, Noon=Dry, CW=Granular
+    ; New:      CCW=Dry, Noon=Vocoder, CW=Granular
+    ; Start with clean input, blend INTO the weirdness.
+    ; Dry Max-Min Blend 0-50%
+    ablenddryfactor min ((ablend * 4.0) - 1.0), a(1.0)
     ablenddry = sqrt(0.5 * (1 - ablenddryfactor))
-    ablendvocoder min ablendvocoder, a(1.0)
+    ablenddry min ablenddry, a(1.0)
+    ablenddry max ablenddry, a(0.0)
+    ; Vocoder Min-Max-Min Blend 0-50-100%
+    ablendvocfactor = abs((ablend * 4.0) - 2.0) - 1.0
+    ablendvocfactor min ablendvocfactor, a(1.0)
+    ablendvocfactor max ablendvocfactor, a(-1.0)
+    ablendvocoder = sqrt(0.5 * (1 - ablendvocfactor))
+    ; Granular Min-Max Blend 50-100%
+    ablendgrainfactor max ((ablend * 4.0) - 3.0), a(-1.0)
+    ablendgranular = sqrt(0.5 * (1 + ablendgrainfactor))
     ablendgranular min ablendgranular, a(1.0)
-    ablendvocoder max ablendvocoder, a(0.0)
     ablendgranular max ablendgranular, a(0.0)
     amixl = (asigL * ablendvocoder) + (agrainCompL * ablendgranular)
     amixr = (asigR * ablendvocoder) + (agrainCompR * ablendgranular)
@@ -1062,15 +1117,439 @@ endif
 
 ;printks "dry: %f\tvocoder: %f\tgranular: %f\n", 0.25, k(ablenddry), k(ablendvocoder), k(ablendgranular)
 
-; --- Gap mode output mute (FINAL STAGE) ---
-if kGapMode == 1 then
-    if k(aphs) > (kAudibleLen / kLoopPeriod) then
+; =====================================================================
+; SUPERNOVA MOD: Play mode output mute
+; Mode 1 (One-shot): mute when not playing
+; =====================================================================
+if kPlayMode == 1 then
+    if kOneShotPlaying == 0 then
         aoutl = 0
         aoutr = 0
     endif
 endif
 
+; =====================================================================
+; SUPERNOVA MOD: Multi-Type Filter Switcher (end-of-chain)
+; 5 types: LP(0), HP(1), Dual Peak(2), Bitcrusher(3), Comb(4)
+; NO off state — each filter has a transparent position in its range.
+; Window knob = filter parameter (cutoff/morph/crush rate)
+; Window_alt = resonance/feedback/bandwidth
+; Source+Reset tap = cycle forward (wraps 4→0)
+; =====================================================================
+
+; --- Filter type cycling: Source+Reset tap = forward ---
+; gkreset_alt is a 10ms pulse from Python (secondary buttons are hardcoded
+; as brief triggers — hold detection is impossible at instrument level).
+; Forward only. 5 types wrap: 0→1→2→3→4→0.
+kResetAltTrig trigger gkreset_alt, 0.5, 0
+if kResetAltTrig == 1 then
+    kFilterType += 1
+    if kFilterType > 4 then
+        kFilterType = 0
+    endif
+endif
+
+; --- Filter controls (smoothed) ---
+kFilterPos portk gkwindow, 0.005
+kResonance portk gkwindow_alt, 0.005
+
+; =================================================================
+; =================================================================
+; FILTER TYPE 0: LOWPASS — moogladder 4-pole
+; Window CW = 22kHz (transparent), CCW = 300Hz (dark but always alive)
+; Exponential curve: smooth log sweep across entire knob range
+; Resonance up to 0.95 — self-oscillation territory for real sweeps
+; NO output tanh — let the resonance peak scream through gain comp
+; =================================================================
+if kFilterType == 0 then
+    kFilterCutLP = 300 * exp(kFilterPos * log(22000 / 300))
+    if kFilterCutLP > 22000 then
+        kFilterCutLP = 22000
+    endif
+    if kFilterCutLP < 300 then
+        kFilterCutLP = 300
+    endif
+    kMoogRes = kResonance * 0.95
+
+    ; Pre-filter saturation: mild overdrive feeds moogladder harmonics
+    aoutl = tanh(aoutl * 1.3)
+    aoutr = tanh(aoutr * 1.3)
+
+    aoutl moogladder aoutl, kFilterCutLP, kMoogRes
+    aoutr moogladder aoutr, kFilterCutLP, kMoogRes
+
+    ; Gain compensation — resonance eats volume, put it back
+    ; NO tanh after this — let the resonant peak breathe
+    kLPGain = 1.0 + (kMoogRes * kMoogRes * 2.0)
+    aoutl = aoutl * a(kLPGain)
+    aoutr = aoutr * a(kLPGain)
+
+; =================================================================
+; FILTER TYPE 1: HIGHPASS — atonex 4-pole + resonant peak
+; Window CCW = 20Hz (transparent), CW = 8kHz (thin but never silent)
+; Quadratic curve: gentle at start, aggressive only at extremes
+; Resonance adds a singing peak at cutoff — NO output tanh to kill it
+; =================================================================
+elseif kFilterType == 1 then
+    ; Quadratic from 20Hz to 8kHz — gentle sweep, no panic at 3:00
+    kFilterCutHP = 20 + (kFilterPos * kFilterPos * 7980)
+    if kFilterCutHP > 8000 then
+        kFilterCutHP = 8000
+    endif
+    if kFilterCutHP < 20 then
+        kFilterCutHP = 20
+    endif
+
+    apreHPl = aoutl
+    apreHPr = aoutr
+
+    ; 4-pole highpass
+    aoutl atonex aoutl, kFilterCutHP, 4
+    aoutr atonex aoutr, kFilterCutHP, 4
+
+    ; Resonant peak: always slightly present, grows with resonance knob
+    ; Base resonance of 0.15 gives the HP some life even at res=0
+    kResAmt = 0.15 + (kResonance * 0.75)
+    kResQ = 2 + (kResonance * 28)
+    kResBW = kFilterCutHP / kResQ
+    if kResBW < 10 then
+        kResBW = 10
+    endif
+    aresL resonx apreHPl, kFilterCutHP, kResBW, 4, 1
+    aresR resonx apreHPr, kFilterCutHP, kResBW, 4, 1
+    aoutl = aoutl + (aresL * kResAmt)
+    aoutr = aoutr + (aresR * kResAmt)
+
+    ; Gain compensation — NO brightness boost, NO output tanh
+    ; Let the resonance peak through clean
+    kHPGain = 1.0 + (kFilterPos * 0.5)
+    aoutl = aoutl * a(kHPGain)
+    aoutr = aoutr * a(kHPGain)
+
+; =================================================================
+; FILTER TYPE 2: DUAL RESONANT PEAK — two sweepable harmonic peaks
+; Window sweeps base frequency (100Hz → 8kHz). Second peak tracks
+; at 2.5x (roughly octave+major third) above — harmonic and musical.
+; Resonance = peak prominence (0=transparent, 1=full wet, sharp peaks)
+; =================================================================
+elseif kFilterType == 2 then
+    ; Base frequency: log sweep 100→8000 Hz
+    kPeakBase = 100 * exp(kFilterPos * log(8000 / 100))
+    ; Second peak at harmonic ratio (2.5x ≈ octave + major third)
+    kPeak2 = kPeakBase * 2.5
+    if kPeak2 > 18000 then
+        kPeak2 = 18000
+    endif
+
+    if kResonance > 0.005 then
+        ; Capture dry
+        aDryPkL = aoutl
+        aDryPkR = aoutr
+
+        ; Q scales with resonance: wider at low res, singing at high res
+        kPeakQ = 3 + (kResonance * 47)  ; Q from 3 to 50
+        kPeakBW1 = kPeakBase / kPeakQ
+        kPeakBW2 = kPeak2 / kPeakQ
+        if kPeakBW1 < 10 then
+            kPeakBW1 = 10
+        endif
+        if kPeakBW2 < 10 then
+            kPeakBW2 = 10
+        endif
+
+        ; Two parallel resonant peaks per channel (iscl=2: RMS normalized)
+        aPk1L reson aoutl, kPeakBase, kPeakBW1, 2
+        aPk2L reson aoutl, kPeak2, kPeakBW2, 2
+        aPk1R reson aoutr, kPeakBase, kPeakBW1, 2
+        aPk2R reson aoutr, kPeak2, kPeakBW2, 2
+
+        ; Mix peaks (second peak slightly quieter for balance)
+        aWetPkL = (aPk1L + aPk2L * 0.65) * 0.75
+        aWetPkR = (aPk1R + aPk2R * 0.65) * 0.75
+
+        ; Soft clip
+        aWetPkL = tanh(aWetPkL * 1.5)
+        aWetPkR = tanh(aWetPkR * 1.5)
+
+        ; Dry/wet crossfade from resonance
+        kPeakWet = kResonance
+        aoutl = (aDryPkL * (1 - kPeakWet)) + (aWetPkL * kPeakWet)
+        aoutr = (aDryPkR * (1 - kPeakWet)) + (aWetPkR * kPeakWet)
+    endif
+    ; kResonance near 0: transparent, no processing
+
+; =================================================================
+; FILTER TYPE 3: BITCRUSHER — dual-axis destruction
+; Window = sample rate crush: CCW(0)=clean(48kHz), CW(1)=200Hz
+; Resonance = bit depth crush: CCW(0)=24bit(clean), CW(1)=~2bit
+; Post-crush saturation + warmth filter for analog-ish character
+; =================================================================
+elseif kFilterType == 3 then
+    ; --- Sample rate axis (Window knob) ---
+    kCrushPos = 1 - kFilterPos  ; flip: CCW=clean, CW=crushed
+    kCrushRate = 200 * exp(kCrushPos * log(48000 / 200))
+    if kCrushRate > 48000 then
+        kCrushRate = 48000
+    endif
+
+    ; --- Bit depth axis (Resonance knob) ---
+    ; 65536 levels (16bit clean) → 4 levels (~2bit destroyed)
+    ; Using exp mapping for musical curve
+    kBitLevels = 4 + ((1 - kResonance) * 65532)
+    if kBitLevels > 65536 then
+        kBitLevels = 65536
+    endif
+    if kBitLevels < 4 then
+        kBitLevels = 4
+    endif
+
+    ; Apply sample rate crush
+    kSRActive = 0
+    if kCrushRate < 47000 then
+        aoutl fold aoutl, sr / kCrushRate
+        aoutr fold aoutr, sr / kCrushRate
+        kSRActive = 1
+    endif
+
+    ; Apply bit depth crush
+    kBDActive = 0
+    if kResonance > 0.01 then
+        ; Quantize: scale up, truncate, scale back
+        aoutl = int(aoutl * a(kBitLevels)) / a(kBitLevels)
+        aoutr = int(aoutr * a(kBitLevels)) / a(kBitLevels)
+        kBDActive = 1
+    endif
+
+    ; Post-crush warmth (only when actually crushing)
+    if kSRActive == 1 || kBDActive == 1 then
+        ; Saturation: drive increases with destruction amount
+        kCrushDrive = 1.0 + ((1 - kCrushPos) * 1.5) + (kResonance * 1.5)
+        aoutl = tanh(aoutl * kCrushDrive) / kCrushDrive
+        aoutr = tanh(aoutr * kCrushDrive) / kCrushDrive
+
+        ; Gentle warmth filter — tames harsh aliasing edges
+        kWarmCut = 2000 + (kCrushPos * 16000)
+        aoutl tonex aoutl, kWarmCut, 1
+        aoutr tonex aoutr, kWarmCut, 1
+    endif
+
+; =================================================================
+; FILTER TYPE 4: COMB± — Tónverk-inspired bipolar comb filter
+; Window controls comb pitch (delay time): CCW=low, CW=high
+; Resonance controls amount AND polarity:
+;   0 = transparent (no comb)
+;   0→0.5 = positive feedback increasing (string-like, ringing, bright)
+;   0.5→1.0 = negative feedback increasing (hollow, tube-like, nasal)
+; Features: LPF in feedback path (warmer tails), L/R stereo detune
+; =================================================================
+elseif kFilterType == 4 then
+    ; Comb pitch: delay time 1ms (CW, high pitch) to 20ms (CCW, low)
+    kCombDelay = 0.001 + ((1 - kFilterPos) * 0.019)
+
+    ; Stereo detune: slight L/R offset for width (~5% spread)
+    kCombDelayL = kCombDelay * 0.975
+    kCombDelayR = kCombDelay * 1.025
+
+    ; Feedback and wet amount from resonance
+    ; 0 = off. 0→0.5 = positive feedback. 0.5→1.0 = negative feedback.
+    kCombFeedback = 0
+    kCombWet = 0
+    if kResonance > 0.01 && kResonance <= 0.5 then
+        ; Positive feedback zone (string/ring)
+        kPosAmt = kResonance / 0.5  ; 0→1
+        kCombFeedback = kPosAmt * 0.92
+        kCombWet = kPosAmt * 0.65
+    elseif kResonance > 0.5 then
+        ; Negative feedback zone (hollow/tube)
+        kNegAmt = (kResonance - 0.5) / 0.5  ; 0→1
+        kCombFeedback = -(kNegAmt * 0.88)
+        kCombWet = kNegAmt * 0.65
+    endif
+
+    ; Safety clamp on feedback
+    if kCombFeedback > 0.95 then
+        kCombFeedback = 0.95
+    endif
+    if kCombFeedback < -0.95 then
+        kCombFeedback = -0.95
+    endif
+
+    ; Capture dry signal
+    aDryCombL = aoutl
+    aDryCombR = aoutr
+
+    ; Comb with LPF in feedback path (warmer, less harsh ringing)
+    kFbkCut = 1000 + (kFilterPos * 8000)
+
+    ; L channel: manual comb via delayr/delayw
+    aDelBufL delayr 0.025
+    aTapL deltapi kCombDelayL
+    aFbkL tonex aTapL, kFbkCut, 1
+    delayw aoutl + (aFbkL * kCombFeedback)
+
+    ; R channel: detuned delay for stereo width
+    aDelBufR delayr 0.025
+    aTapR deltapi kCombDelayR
+    aFbkR tonex aTapR, kFbkCut, 1
+    delayw aoutr + (aFbkR * kCombFeedback)
+
+    ; Soft clip the wet signal
+    aCombWetL = tanh(aTapL * 1.3)
+    aCombWetR = tanh(aTapR * 1.3)
+
+    ; Dry/wet crossfade
+    aoutl = (aDryCombL * (1 - kCombWet)) + (aCombWetL * kCombWet)
+    aoutr = (aDryCombR * (1 - kCombWet)) + (aCombWetR * kCombWet)
+
+    aoutl = tanh(aoutl)
+    aoutr = tanh(aoutr)
+endif
+
+; =====================================================================
+; SUPERNOVA MOD: Frequency Shifter (Source+Blend) + Stereo Width (Source+Size)
+;
+; Source+Blend (gkblend_alt) — main shift, bidirectional from noon:
+;   CCW(0.0) = -1000 Hz (down, 2x range)
+;   noon(0.5) = bypass (hard deadzone)
+;   CW(1.0) = +500 Hz (up)
+;
+; Source+Size (gkloopsize_alt) — chorus-based stereo widening:
+;   CCW(0.0) = off (mono-compatible)
+;   0.0–0.8  = clean chorus width (modulated delay, lush)
+;   0.8–1.0  = smear zone (deeper mod, longer delay, dreamy)
+; =====================================================================
+
+; --- Frequency Shifter ---
+kFShiftRaw = (0.5 - gkblend_alt) * 2.0 ; -1 to +1, flipped for hardware
+
+; Asymmetric scaling: CCW = -1000Hz, CW = +500Hz
+if kFShiftRaw < 0 then
+    kFShiftTarget = kFShiftRaw * 1000
+else
+    kFShiftTarget = kFShiftRaw * 500
+endif
+kFShiftHz portk kFShiftTarget, 0.02
+
+; Hard deadzone: ±2Hz = pure bypass
+if abs(kFShiftHz) < 2 then
+    kFShiftHz = 0
+endif
+
+; Hilbert transform via biquad allpass network
+aHilIL, aHilQL HilbertIIR aoutl
+aHilIR, aHilQR HilbertIIR aoutr
+
+; Same shift frequency for both channels (no L/R offset — that caused pitch drop)
+aModCos oscil 1, kFShiftHz, giSine, 0.25
+aModSin oscil 1, kFShiftHz, giSine
+
+; Upper sideband: I*cos - Q*sin
+aFShiftL = aHilIL * aModCos - aHilQL * aModSin
+aFShiftR = aHilIR * aModCos - aHilQR * aModSin
+
+; Wet/dry: hard bypass in deadzone
+if kFShiftHz == 0 then
+    kFShiftWet = 0
+else
+    kFShiftWet = abs(kFShiftHz) * 0.1
+    if kFShiftWet > 1 then
+        kFShiftWet = 1
+    endif
+endif
+aoutl = aoutl * (1 - kFShiftWet) + aFShiftL * kFShiftWet
+aoutr = aoutr * (1 - kFShiftWet) + aFShiftR * kFShiftWet
+
+; --- Stereo Widening (Source+Size) — Allpass decorrelation ---
+; Phase-shifted R channel + Haas delay for genuine mono→stereo widening.
+; Haas delay is the primary widener — proven, effective, immediate.
+; Allpass decorrelation on top for extra phase scramble.
+; LFO modulation prevents static comb filtering artifacts.
+; CCW(0) = mono (L=R), CW(1) = max stereo spread
+kWidenRaw = gkloopsize_alt  ; 0 = off, 1 = max spread
+
+if kWidenRaw > 0.005 then
+    ; Haas delay on R: creates immediate stereo perception from mono
+    ; Even 3ms of L/R offset creates noticeable width
+    kHaasBase = 3 + (kWidenRaw * 22)  ; 3→25ms
+
+    ; Slow modulation prevents static comb filtering
+    aHaasLfo oscil kWidenRaw * 1.5, 0.25, giSine
+    aHaasTime = a(kHaasBase) + aHaasLfo
+    aHaasTime max aHaasTime, a(0.5)
+
+    ; Delayed + allpass-decorrelated R channel
+    aWidenR vdelay aoutr, aHaasTime, 30
+    aWidenR biquad aWidenR, -0.97, 1, 0, 1, -0.97, 0
+    aWidenR biquad aWidenR, -0.69, 1, 0, 1, -0.69, 0
+
+    ; Gentle warmth filter
+    aWidenR tonex aWidenR, 12000, 1
+
+    ; R gets progressively replaced with widened version
+    kWidenMix = kWidenRaw
+    if kWidenMix > 0.9 then
+        kWidenMix = 0.9
+    endif
+    aoutr = aoutr * (1 - kWidenMix) + aWidenR * kWidenMix
+endif
+
+; =====================================================================
+; SUPERNOVA MOD: Tail Dampener / Crossfader (Source+Overlap)
+; Dual-envelope transient preserver: kills sustain tails, keeps attacks.
+; CCW(0) = off (transparent, full natural decay)
+; CW(1) = maximum dampening (attacks punch through, tails fade to null)
+;
+; How it works:
+;   Fast envelope (10ms release) tracks signal tightly — drops as signal drops.
+;   Slow envelope (release scales with knob) holds recent peaks.
+;   Gain = fast / slow. During attack: both high → gain ≈ 1.0 (no loss).
+;   During tail: fast drops while slow holds → gain → 0 (tail killed).
+;   More crossfade = slower peak hold = bigger contrast = faster tail death.
+; =====================================================================
+kDampAmt portk gkoverlap_alt, 0.01
+
+if kDampAmt > 0.005 then
+    ; Fast envelope: always tight, tracks transients and drops quickly
+    aFastL follow2 aoutl, 0.001, 0.010  ; 1ms attack, 10ms release
+    aFastR follow2 aoutr, 0.001, 0.010
+
+    ; Slow envelope: peak hold — release time scales with knob
+    ; More dampening = slower release = holds peak longer = bigger contrast
+    kSlowRel = 0.010 + (kDampAmt * 2.0)  ; 10ms → 2010ms
+    aSlowL follow2 aoutl, 0.001, kSlowRel
+    aSlowR follow2 aoutr, 0.001, kSlowRel
+
+    ; Gain ratio: fast / slow
+    ; Attack: fast ≈ slow → ~1.0 (untouched)
+    ; Tail: fast << slow → approaches 0 (killed)
+    ; Epsilon prevents division by zero on silence
+    aGainL = aFastL / (aSlowL + a(0.00001))
+    aGainR = aFastR / (aSlowR + a(0.00001))
+
+    ; Clamp to 0-1 (fast can briefly overshoot slow on transients)
+    aGainL min aGainL, a(1.0)
+    aGainR min aGainR, a(1.0)
+    aGainL max aGainL, a(0.0)
+    aGainR max aGainR, a(0.0)
+
+    aoutl = aoutl * aGainL
+    aoutr = aoutr * aGainR
+endif
+
+; =====================================================================
+; SUPERNOVA MOD: Killswitch (Freeze button = momentary mute)
+; Hold Freeze to kill output. Release to play.
+; 0.3ms portamento — fast enough for 16th note gate patterns.
+; nebconfig sets freeze to momentary,state so gkfreeze = 1 while held, 0 on release.
+; =====================================================================
+kKillRaw = 1 - gkfreeze
+kKillSmooth portk kKillRaw, 0.0003, 1
+aoutl = aoutl * a(kKillSmooth)
+aoutr = aoutr * a(kKillSmooth)
+
 outs aoutl, aoutr ; output
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; UI related comm. ;;;
@@ -1079,6 +1558,22 @@ outs aoutl, aoutr ; output
 ; Set EOL Pulse Output
 ktrig metro kr
 kphssync max_k aphssync, ktrig, 2
+
+; =====================================================================
+; SUPERNOVA MOD: One-shot wrap detection (kPlayMode == 1 only)
+; After a trigger fires, we wait kOneShotDelay k-periods (~5ms) before
+; checking for phasor wrap. This prevents false positives if the phasor
+; was near the wrap point when triggered. Once a wrap is detected,
+; kOneShotPlaying is set to 0 and output mutes until the next trigger.
+; =====================================================================
+if kPlayMode == 1 then
+    if kOneShotDelay > 0 then
+        kOneShotDelay -= 1
+    elseif kphssync == 1 && kOneShotPlaying == 1 then
+        kOneShotPlaying = 0
+    endif
+endif
+
 if kphssync == 1 then
     if krecordA == 1 then
         krecordA = 0
