@@ -27,6 +27,10 @@ designed for live performance destruction. It keeps everything that makes Nebula
 great — the phase vocoder, granular engine, recording — and bolts on controls
 that actually make sense when you're performing.
 
+Every secondary control has been repurposed. Grain muting, grain displacement,
+grain panning, granular FM — gone. Replaced with chord grains, frequency shifting,
+a five-mode filter bank, stereo widening, a Buchla LPG, and a performative killswitch.
+
 **This is an instrument file (`.instr`), not a full firmware replacement.**
 Your Nebulae stays intact. Drop it on USB. Load it. Go.
 
@@ -36,16 +40,24 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 
 ```
  ┌─────────────────────────────────────────────────────────────┐
- │                    SUPERNOVA v0.5                           │
+ │                    SUPERNOVA v0.8                           │
  │                                                             │
- │  ✅ Absolute Start/End ──── Start and Size = exact points   │
- │  ✅ Gap Mode ───────────── Morphagene-style rhythmic gaps   │
- │  ✅ Killswitch ─────────── Speed button = performative mute │
+ │  ✅ Killswitch ─────────── Freeze = momentary mute          │
  │  ✅ One-Shot Mode ──────── Trigger-to-play, no looping      │
- │  🔲 LPG Envelope ───────── Buchla 292-style on one-shots    │
- │  🔲 Crossfader ─────────── Output level control in loop mode│
- │  🔲 Filter Cycling ─────── LP/HP/BP/Comb/Resonant Body     │
- │  🔲 Chord Engine ───────── Harmonic pitch stacking          │
+ │  ✅ LPG Envelope ───────── Buchla 292t on one-shots         │
+ │  ✅ Tail Dampener ──────── Transient-preserving crossfader  │
+ │  ✅ Chord Grains ───────── Maj7 harmonic pitch stacking     │
+ │  ✅ Voice Detune ───────── Supersaw unison spread           │
+ │  ✅ 5-Mode Filter ──────── LP / HP / Dual Peak / Crush / Comb│
+ │  ✅ Frequency Shifter ──── Hilbert-based bidirectional      │
+ │  ✅ Stereo Widener ─────── Haas delay + allpass decorrelation│
+ │  ✅ Blend Reorder ──────── Live: Dry → Vocoder → Granular   │
+ │                                                             │
+ │  🔲 Absolute Start/End ── Independent start/end positions   │
+ │  🔲 Gap Mode ───────────── Morphagene-style rhythmic gaps   │
+ │  🔲 Turntable Mode ─────── CDJ jog wheel scrub             │
+ │  🔲 Reverb ─────────────── Shimmer + saturation             │
+ │  🔲 Strum ──────────────── Grain timing distribution        │
  │  🔲 Beat Slicing ───────── Rhythmic buffer chopping         │
  │                                                             │
  │  ✅ = implemented   🔲 = planned                            │
@@ -74,7 +86,8 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
               │                │ │                 │
               │  pitch-shift   │ │  density        │
               │  time-stretch  │ │  overlap        │
-              │                │ │  window shape   │
+              │                │ │  chord grains   │
+              │                │ │  voice detune   │
               └────────┬───────┘ └────────┬────────┘
                        │                  │
                        │    ┌─────────┐   │
@@ -83,21 +96,37 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
                             └────┬────┘
                                  │
                     ┌────────────▼────────────┐
-                    │      ONE-SHOT GATE      │
-                    │  (mute when not armed)  │
-                    │                         │
-                    │  🔲 LPG here when       │
-                    │     implemented         │
+                    │    ONE-SHOT GATE        │
+                    │  (mute when idle, or    │
+                    │   bypass for LPG mode)  │
                     └────────────┬────────────┘
                                  │
                     ┌────────────▼────────────┐
-                    │    GAP MODE GATE        │
-                    │  (silence insertion)    │
+                    │  5-MODE FILTER CHAIN    │
+                    │  LP│HP│Peak│Crush│Comb  │
+                    │  Window = param         │
+                    │  Window_alt = resonance │
                     └────────────┬────────────┘
                                  │
                     ┌────────────▼────────────┐
-                    │    KILLSWITCH GATE      │
-                    │  (speed button mute)    │
+                    │   FREQUENCY SHIFTER     │
+                    │  Hilbert + ring mod     │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │    STEREO WIDENER       │
+                    │  Haas delay + allpass   │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │  TAIL DAMPENER / LPG    │
+                    │  Loop: transient xfader │
+                    │  One-shot: 292t LPG     │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │      KILLSWITCH         │
+                    │  (Freeze = mute)        │
                     └────────────┬────────────┘
                                  │
                             ┌────▼────┐
@@ -134,293 +163,248 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
   ┌──────────────────────────────────────────────────────────────┐
   │                                                              │
   │    START ●                              ● SIZE               │
-  │    Absolute start         SPEED ◉       Absolute end         │
-  │    position in file     ← x4  x1  x4 →  position in file   │
+  │    Loop start offset     SPEED ◉        Relative loop size   │
+  │    (stock behavior)    ← x4  x1  x4 →  (stock behavior)     │
   │                                                              │
   │    DENSITY ●                            ● OVERLAP            │
   │    Grain rate            PITCH ◉        Grain size           │
   │    0 → audio rate      -3oct  +2oct     + overlap amount     │
   │                                                              │
   │    BLEND ●                              ● WINDOW             │
-  │    Vocoder ← → Grain    ───────────     Grain envelope       │
-  │    (Live: Dry center)                   Gauss → Square       │
+  │    Vocoder ← → Grain    ───────────     ✦ Filter parameter   │
+  │    (Live: Dry center)                   (cutoff/morph/crush) │
   │                                                              │
   └──────────────────────────────────────────────────────────────┘
 ```
 
-| Control   | Range | Function                                       | SuperNova Change                   |
-|-----------|-------|------------------------------------------------|------------------------------------|
-| Start     | 0–1   | Absolute start position in file/buffer         | ✦ Now absolute, not offset         |
-| Size      | 0–1   | Absolute end position in file/buffer           | ✦ Now absolute, not relative       |
-| Speed     | 0–1   | Playback speed (±4x), center = 1x              | —                                  |
-| Pitch     | 0–1   | Pitch shift, -3 to +2 octaves                  | —                                  |
-| Density   | 0–1   | Grain trigger rate                             | —                                  |
-| Overlap   | 0–1   | Grain size + overlap amount                    | —                                  |
-| Blend     | 0–1   | Mix: phase vocoder ↔ granular                  | —                                  |
-| Window    | 0–1   | Grain amplitude envelope shape                 | —                                  |
+| Control   | Range | Function                                       | SuperNova Change                         |
+|-----------|-------|------------------------------------------------|------------------------------------------|
+| Start     | 0–1   | Loop start offset in file/buffer               | —                                        |
+| Size      | 0–1   | Relative loop size from start point            | —                                        |
+| Speed     | 0–1   | Playback speed (±4x), center = 1x              | —                                        |
+| Pitch     | 0–1   | Pitch shift, -3 to +2 octaves                  | ✦ 2ms smoothing added                    |
+| Density   | 0–1   | Grain trigger rate                             | ✦ Freeze_alt gate removed (always works) |
+| Overlap   | 0–1   | Grain size + overlap amount                    | —                                        |
+| Blend     | 0–1   | Mix: phase vocoder ↔ granular                  | ✦ Live mode reordered (Dry→Voc→Grain)    |
+| Window    | 0–1   | ~~Grain window shape~~ → **Filter parameter**  | ✦ Grain window locked Gaussian           |
 
 ### Buttons
 
-| Button  | Primary Function         | SuperNova Change                    |
-|---------|--------------------------|-------------------------------------|
-| Record  | Record to buffer         | —                                   |
-| File    | Advance to next file     | —                                   |
-| Source  | Toggle File/Live mode    | Hold for secondary menu             |
-| Reset   | Reset to start position  | Also triggers one-shot playback     |
-| Freeze  | ~~Freeze playback~~      | ✦ Momentary (nebconfig change)      |
-
-### Speed Encoder Button
-
-| Press              | Function                                      |
-|--------------------|-----------------------------------------------|
-| Click              | ✦ Killswitch — toggle output mute             |
-| Hold (3 sec)       | Enter instrument selector (stock behavior)    |
+| Button  | Primary Function              | SuperNova Change                              |
+|---------|-------------------------------|-----------------------------------------------|
+| Record  | Record to buffer              | —                                             |
+| File    | Advance to next file          | —                                             |
+| Source  | Toggle File/Live mode         | Hold for secondary menu                       |
+| Reset   | Reset to start position       | Also triggers one-shot playback               |
+| Freeze  | ~~Spectral freeze (latch)~~   | ✦ Killswitch — momentary mute (hold to kill)  |
 
 ### Secondary Controls (Hold Source)
 
-| Control        | Stock Function       | SuperNova Change                         |
-|----------------|----------------------|------------------------------------------|
-| Source+Pitch   | Pitch fluctuation    | —                                        |
-| Source+Start   | Grain position rand  | —                                        |
-| Source+Size    | Grain panning        | —                                        |
-| Source+Density | Grain displacement   | —                                        |
-| Source+Overlap | Grain size rand      | 🔲 Crossfader (loop) / LPG Decay (1-shot)|
-| Source+Window  | Grain muting         | —                                        |
-| Source+Blend   | Granular FM          | —                                        |
-| Source+Freeze  | ~~Grain trigger~~    | ✦ One-Shot mode toggle                   |
-| Source+Reset   | (none)               | 🔲 Filter type cycling (planned)         |
+| Control        | Stock Function       | SuperNova Function                             |
+|----------------|----------------------|------------------------------------------------|
+| Source+Pitch   | Pitch fluctuation    | ✦ **Chord Grains** — Maj7 stacking             |
+| Source+Start   | Grain position rand  | — (unchanged)                                  |
+| Source+Size    | Grain panning        | ✦ **Stereo Widener** — Haas + allpass          |
+| Source+Density | Grain displacement   | ✦ **Voice Detune** — ±50 cent drift            |
+| Source+Overlap | Grain size rand      | ✦ **Tail Dampener** (loop) / **LPG** (one-shot)|
+| Source+Window  | Grain muting         | ✦ **Filter Resonance / Feedback**              |
+| Source+Blend   | Granular FM          | ✦ **Frequency Shifter** — Hilbert transform    |
+| Source+Freeze  | Grain trigger mode   | ✦ **One-Shot Mode** toggle                     |
+| Source+Reset   | (none)               | ✦ **Filter Type** cycling (5 modes)            |
+| Source+Record  | Circular recording   | — (unchanged)                                  |
+| Source+File    | File order           | — (unchanged)                                  |
 
 ---
 
 ## Feature Details
 
-### Absolute Start / End
+### Killswitch (Freeze Button)
 
-The stock Nebulae treats Start as an offset and Size as a relative window. This means
-Size shrinks as Start increases — confusing in performance.
+Freeze is no longer a spectral freeze. It's a Buckethead-style performative mute.
+Hold Freeze = silence. Release = audio. 0.3ms response time — fast enough for
+16th note gate patterns at 140 BPM.
 
-**SuperNova changes both to absolute positions:**
+The nebconfig changes Freeze from latching to `momentary,state`, so `gkfreeze = 1`
+while the button is physically held down.
+
+### One-Shot Mode (Source+Freeze)
+
+Toggle one-shot mode on/off with Source+Freeze. When active, the sample/buffer
+plays once through (respecting Start/Size positions) and stops. Trigger again
+with the Source gate input or Reset button/gate.
+
+The phasor freezes when idle (no position drift). Re-triggering while playing
+resets the playthrough.
+
+### LPG Envelope (Source+Overlap in One-Shot Mode)
+
+When in one-shot mode, Source+Overlap becomes a Buchla 292t-style Low Pass Gate.
+
+The LPG opens instantly on trigger, then decays exponentially. The VCA and filter
+track together — brightness fades with volume, darkening the tail naturally.
+The squared filter tracking means cutoff drops faster than amplitude, giving the
+characteristic 292t "plonk" that darkens before it silences.
 
 ```
-  Stock Behavior:                    SuperNova Behavior:
-  ┌──────────────────────┐           ┌──────────────────────┐
-  │ Start──►[===Size===] │           │ [Start]────────[Size] │
-  │    ▲ offset    ▲ relative        │    ▲ absolute   ▲ absolute
-  │    shrinks Size ──┘  │           │    independent ──┘    │
-  └──────────────────────┘           └──────────────────────┘
+  Source+Overlap (One-Shot Mode):
+  CCW(0) = off — hard gate, stock one-shot behavior
+  CW(1) = long decay — 5 second vactrol-style tail
 
-  Start = 0.2, Size = 0.8:
-  ├────[████████████████████████]────┤
-  0.0  ▲                        ▲  1.0
-       0.2 (Start)          0.8 (Size/End)
+  Decay time: 50ms (barely open) → 5s (sustaining wash)
+  Squared knob curve for musical feel
 ```
 
-- **Start < Size** → Normal playback between the two points
-- **Start > Size** → Gap Mode (see below)
-- Both respond to CV normally
+When the one-shot finishes playing, the phasor freezes and the engines hold
+their last audio frame. The LPG envelope shapes that frozen frame into a natural
+decay tail — exactly how a vactrol LPG sustains a resonant pluck.
+
+Re-triggering while the LPG is still decaying snaps it back open instantly.
+
+### Tail Dampener (Source+Overlap in Loop Mode)
+
+When looping normally, Source+Overlap becomes a transient-preserving crossfader.
+It kills sustain tails while preserving attack transients.
+
+Dual-envelope follower: fast envelope (10ms release) tracks signal tightly while
+slow envelope (release scales with knob) holds recent peaks. The gain ratio
+(fast / slow) passes attacks through (both high → ~1.0) while killing tails
+(fast drops while slow holds → gain approaches 0).
+
+```
+  Source+Overlap (Loop Mode):
+  CCW(0) = off — full natural decay
+  CW(1) = maximum dampening — attacks punch, tails vanish
+```
+
+### Chord Grains (Source+Pitch)
+
+Progressive harmonic pitch stacking across partikkel's four grain voices.
+Replaces the stock random pitch fluctuation with deterministic chord intervals.
+
+```
+  Source+Pitch:
+  CCW(0.0)    = unison — all 4 voices at root pitch
+  0.0–0.5     = root + perfect 5th fading in
+  0.5–0.75    = root + 5th + major 3rd fading in
+  0.75–1.0    = root + 5th + 3rd + major 7th fading in (full Maj7)
+```
+
+Fixed chord quality: Major 7th (P5 = 7 semitones, M3 = 4 semitones, M7 = 11 semitones).
+Volume stays constant — chord effect is purely pitch-based. When chord is off,
+all 4 voices play at unison (identical to stock behavior). Max grains bumped to 20
+(from stock 10) to support denser chord textures.
+
+### Voice Detune (Source+Density)
+
+Per-voice random pitch drift that stacks with chord intervals.
+
+```
+  Source+Density:
+  CCW(0) = tight unison, no drift
+  CW(1) = ±50 cents per voice, independent slow random drift
+```
+
+Each voice gets its own LFO rate (1.1, 1.7, 2.3 Hz) for organic movement.
+With chord off: supersaw unison texture. With chord on: detuned chords.
+
+### Multi-Type Filter (Source+Reset + Window + Window_alt)
+
+Five filter types cycled forward by tapping Source+Reset (wraps 4→0).
+Window knob controls the primary parameter. Window_alt (Source+Window)
+controls resonance/feedback.
+
+No bypass state — each filter has a transparent position in its knob range.
+Switch to LP and park Window CW for effectively transparent operation.
+
+```
+  Type 0: LOWPASS — moogladder 4-pole
+          Window: 300Hz (CCW) → 22kHz (CW, transparent)
+          Resonance: clean → self-oscillation screaming
+
+  Type 1: HIGHPASS — atonex 4-pole + resonant peak (resonx)
+          Window: 20Hz (CCW, transparent) → 8kHz (CW)
+          Resonance: clean → resonant peak at cutoff
+
+  Type 2: DUAL PEAK — two reson filters at harmonic ratio (2.5x)
+          Window: 100Hz (CCW) → 8kHz (CW)
+          Resonance: dry (off) → two singing resonant peaks
+
+  Type 3: BITCRUSHER — dual-axis destruction
+          Window: clean 48kHz (CCW) → 200Hz sample rate (CW)
+          Resonance: clean 24-bit (off) → ~2-bit quantization (CW)
+          Post-crush saturation + warmth filter
+
+  Type 4: COMB± — bipolar comb filter
+          Window: low pitch (CCW) → high pitch (CW)
+          Resonance: transparent (off) → positive feedback (0→0.5)
+                     → negative feedback (0.5→1.0)
+          LP in feedback path for warm tails. L/R stereo detune.
+```
+
+### Frequency Shifter (Source+Blend)
+
+Bidirectional frequency shift via manual Hilbert transform (biquad allpass network).
+
+```
+  Source+Blend:
+  CCW(0.0) = -1000 Hz (down shift, 2x range)
+  Noon(0.5) = bypass (hard ±2Hz deadzone)
+  CW(1.0)  = +500 Hz (up shift)
+```
+
+Default alt value is 0.5 (bypass). The asymmetric range gives more downshift
+headroom — down-shifting is musically more useful and less likely to alias.
+
+### Stereo Widener (Source+Size)
+
+Haas delay + allpass decorrelation for genuine mono→stereo widening.
+
+```
+  Source+Size:
+  CCW(0) = off (mono-compatible)
+  CW(1) = max spread (25ms Haas + allpass phase scramble)
+```
+
+Slow LFO modulation (0.25 Hz) prevents static comb filtering. Gentle warmth
+filter (tonex 12kHz) on the widened channel prevents harshness. Capped at
+90% wet to maintain center image stability.
+
+### Blend Reorder (Live Mode)
+
+Live mode blend order changed for performance logic:
+
+```
+  Stock:     CCW = Vocoder    Noon = Dry      CW = Granular
+  SuperNova: CCW = Dry        Noon = Vocoder  CW = Granular
+```
+
+Start with your clean input, then sweep CW into processed sound.
+File mode blend is unchanged (stock constant-power crossfade).
 
 ---
 
-### Gap Mode (Morphagene-Style)
-
-When the Size knob is turned **below** the Start knob position, SuperNova
-enters Gap Mode — a rhythmic slice-and-silence pattern inspired by
-the Make Noise Morphagene.
+## Future Roadmap
 
 ```
-  Start = 0.6,  Size = 0.3  →  GAP MODE
+  Phase 1 — Core Engine ✅
+  ├── Killswitch (momentary mute)
+  ├── One-Shot Mode
+  ├── LPG Envelope (292t-style)
+  ├── Tail Dampener / Crossfader
+  ├── Chord Grains + Voice Detune
+  ├── 5-Mode Filter Chain
+  ├── Frequency Shifter
+  ├── Stereo Widener
+  └── Live Blend Reorder
 
-  Audio file:
-  ├──────────────────────────────────────────────┤
-  0.0                    ▲                      1.0
-                         0.6 (Start)
+  Phase 2 — Playback Modes
+  ├── 🔲 Absolute Start/End (independent positions)
+  ├── 🔲 Gap Mode (Morphagene-style rhythmic gaps)
+  └── 🔲 Turntable Mode (CDJ jog wheel scrub)
 
-  Playback pattern:
-  ┌────┐          ┌────┐          ┌────┐
-  │PLAY│          │PLAY│          │PLAY│
-  │40ms│          │40ms│          │40ms│
-  └────┘──────────└────┘──────────└────┘
-        ◄─ gap ──►      ◄─ gap ──►
-
-  Gap length grows as Size moves further below Start.
-  At Size = Start: no gap (continuous 40ms slice)
-  At Size = 0:     maximum gap length
-```
-
-**How it works internally:**
-- A 40ms audio slice is clamped at the Start position
-- Gap length scales quadratically: `0.5 * (distance²) / bufferlen`
-- Grains read from the slice center (or randomly within slice bounds)
-- Output hard-mutes during the gap portion of each cycle
-- Both vocoder and grain outputs are gated
-
----
-
-### Killswitch
-
-A Buckethead-inspired performative audio kill. Press the Speed encoder
-button to instantly mute all output. Press again to unmute.
-
-```
-  Speed encoder button:
-  ┌───────┐     ┌───────┐     ┌───────┐
-  │ PRESS │ ──► │ MUTED │ ──► │ PRESS │ ──► unmuted
-  └───────┘     └───────┘     └───────┘
-
-  When muted:
-  - aoutl = 0, aoutr = 0
-  - Engines keep running (no click on unmute)
-  - Phasor keeps advancing (no position jump)
-```
-
-> **Note:** The killswitch operates at the final output stage.
-> Recording and internal processing continue unaffected.
-
----
-
-### One-Shot Mode
-
-Activated via **Source + Freeze** (same button combo as the stock
-grain trigger mode, which it replaces).
-
-When enabled, the sample/buffer **does not loop**. It plays once
-from Start to Size and stops. Retriggered via the **Source gate input**
-or the **Reset button/gate**.
-
-```
-  LOOP MODE (default):              ONE-SHOT MODE (Source+Freeze):
-  ┌────────────────────┐            ┌────────────────────┐
-  │ ╔══════════╗       │            │ ╔══════════╗       │
-  │ ║ playing  ║ ──┐   │            │ ║ playing  ║       │
-  │ ╚══════════╝   │   │            │ ╚══════════╝       │
-  │       ▲        │   │            │       ▲      ┌───┐ │
-  │       └────────┘   │            │       └──────│TRG│ │
-  │    (loops forever) │            │   (waits)    └───┘ │
-  └────────────────────┘            └────────────────────┘
-
-  Trigger sources:
-  ├── Source gate jack (primary)
-  ├── Reset button
-  └── Reset gate jack
-```
-
-**Trigger → Play → Stop → Wait → Trigger → ...**
-
-The one-shot respects all current knob positions: Start, Size, Speed,
-Pitch, Blend, Density — everything. It plays exactly what you'd hear
-in loop mode, just once.
-
----
-
-## Planned Features
-
-### Crossfader / LPG (Source+Overlap)
-
-Source+Overlap will become a dual-behavior control depending on playback mode:
-
-```
-  ┌─────────────────────────────────────────────────┐
-  │              SOURCE + OVERLAP                   │
-  │                                                 │
-  │  LOOP MODE:         ONE-SHOT MODE:              │
-  │  ┌──────────────┐   ┌──────────────────────┐   │
-  │  │  CROSSFADER   │   │    LPG ENVELOPE      │   │
-  │  │  Output level │   │  Buchla 292-style    │   │
-  │  │  fade in/out  │   │                      │   │
-  │  │  of buffer    │   │  VCA ──┐             │   │
-  │  │               │   │       ├─► coupled    │   │
-  │  │  CCW = silent │   │  VCF ──┘  decay      │   │
-  │  │  CW  = full   │   │                      │   │
-  │  └──────────────┘   │  CCW = short pluck    │   │
-  │                      │  CW  = long swell    │   │
-  │                      └──────────────────────┘   │
-  └─────────────────────────────────────────────────┘
-```
-
-**LPG Character:**
-
-```
-  Trigger arrives:
-
-  VCA ───────────╮
-                  │    ┌─────────────────────────────────┐
-  Amplitude:      │    │  ╱╲                              │
-                  ├───►│ ╱  ╲                             │
-                  │    │╱    ╲╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╲         │
-  VCF ───────────╮│    │      exponential decay   ╲____   │
-                  │    └─────────────────────────────────┘
-  Cutoff:         │         ▲ attack    decay ▲
-                  │         │           │
-                  │    Source+Overlap controls both
-                  │    (short pluck ◄──► long swell)
-                  │
-                  ▼
-             ┌─────────┐
-             │  OUTPUT  │
-             └─────────┘
-```
-
-| Parameter       | Control          | Min (CCW)           | Max (CW)            |
-|-----------------|------------------|---------------------|---------------------|
-| Attack time     | Source+Overlap   | ~1ms (sharp pluck)  | ~50ms (soft swell)  |
-| Decay time      | Source+Overlap   | ~30ms (tight plonk) | ~3s (long sustain)  |
-| Filter tracking | Coupled to VCA   | 200 Hz (closed)     | 18 kHz (open)       |
-
-- VCA opens slightly faster than filter → gives the "thonk" quality
-- Exponential decay curves → natural, not synthy
-- Filter and amplitude coupled but not identical → organic, woody
-- CCW: percussive plinks, sample chops
-- CW: full sustain, gentle fade
-
----
-
-### Filter Cycling (Source+Reset)
-
-Pressing Source+Reset will cycle through filter modes applied to the
-main output:
-
-```
-  Source+Reset cycles through:
-
-  ┌──────┐    ┌──────┐    ┌──────┐    ┌──────┐    ┌──────────┐
-  │BYPASS│───►│  LP  │───►│  HP  │───►│  BP  │───►│ RESONANT │──┐
-  │      │    │      │    │      │    │      │    │   BODY   │  │
-  └──────┘    └──────┘    └──────┘    └──────┘    └──────────┘  │
-      ▲                                                         │
-      └─────────────────────────────────────────────────────────┘
-```
-
-| Mode          | Opcode(s)            | Character                           |
-|---------------|----------------------|-------------------------------------|
-| Bypass        | —                    | Clean signal                        |
-| Lowpass       | moogladder           | Warm, analog, classic               |
-| Highpass      | atonex + resonx      | Thin, cutting                       |
-| Bandpass      | resonx               | Vocal, nasal, telephone             |
-| Resonant Body | alpass + vcomb       | Tuned room / comb → reverb spectrum |
-
-**Resonant Body** is a reverb-derived filter that combines allpass
-diffusion with a tuned comb resonator. At low diffusion it acts as
-a metallic comb filter; at high diffusion it becomes a resonant
-room/reverb character. One mode, full spectrum from pluck to wash.
-
----
-
-### Future Roadmap
-
-```
-  Phase 1 — Core Playback ✅
-  ├── Absolute Start/End
-  ├── Gap Mode
-  ├── Killswitch
-  └── One-Shot Mode
-
-  Phase 2 — Dynamics & Filtering
-  ├── 🔲 LPG Envelope (one-shot mode)
-  ├── 🔲 Crossfader (loop mode)
-  └── 🔲 Filter Type Cycling (Source+Reset)
-
-  Phase 3 — Extended Synthesis
-  ├── 🔲 Chord Engine (harmonic pitch stacking)
+  Phase 3 — Effects & Synthesis
+  ├── 🔲 Reverb (shimmer + saturation)
+  ├── 🔲 Strum (grain timing distribution — tables defined, not wired)
   └── 🔲 Beat Slicing (rhythmic buffer chopping)
 ```
 
@@ -439,16 +423,26 @@ reset,triggered,rising
 source,latching,falling
 file,incremental,falling
 record,latching,rising
+blend_alt,0.5
+window_alt,0
+overlap_alt,0
+loopsize_alt,0
+density_alt,0
 nebconfigend
 ```
 
-| Parameter | Value           | Note                                        |
-|-----------|-----------------|---------------------------------------------|
-| ksmps     | 64              | Samples per k-cycle                         |
-| -B        | 2048            | Buffer size                                 |
-| -b        | 512             | Period size                                 |
-| sr        | 48000           | Sample rate                                 |
-| freeze    | momentary,state | ✦ Changed from latching (for killswitch)    |
+| Parameter    | Value           | Note                                         |
+|--------------|-----------------|----------------------------------------------|
+| ksmps        | 64              | Samples per k-cycle                          |
+| -B           | 2048            | Buffer size                                  |
+| -b           | 512             | Period size                                  |
+| sr           | 48000           | Sample rate                                  |
+| freeze       | momentary,state | ✦ Changed from latching (killswitch)         |
+| blend_alt    | 0.5             | ✦ Freq shifter default = bypass (noon)       |
+| window_alt   | 0               | ✦ Filter resonance default = off             |
+| overlap_alt  | 0               | ✦ Tail dampener / LPG default = off          |
+| loopsize_alt | 0               | ✦ Stereo widener default = off               |
+| density_alt  | 0               | ✦ Voice detune default = off                 |
 
 ---
 
@@ -477,11 +471,14 @@ No Python or firmware modifications required.
        ├── instr 1  ─── Main DSP (runs forever)
        │   ├── Phasor (syncphasor)
        │   ├── Phase Vocoder (mincer)
-       │   ├── Granular Engine (partikkel × 2, L+R)
-       │   ├── Mixer / Blend
-       │   ├── One-Shot Gate
-       │   ├── Gap Mode Gate
-       │   ├── Killswitch Gate
+       │   ├── Granular Engine (partikkel × 2, L+R with chord voices)
+       │   ├── Mixer / Blend (Alex reorder for Live mode)
+       │   ├── One-Shot Gate (hard mute or LPG bypass)
+       │   ├── Filter Chain (5 types, Source+Reset cycling)
+       │   ├── Frequency Shifter (HilbertIIR UDO + ring mod)
+       │   ├── Stereo Widener (Haas delay + allpass)
+       │   ├── Tail Dampener / LPG (dual-envelope or 292t)
+       │   ├── Killswitch (Freeze momentary mute)
        │   └── Output (outs)
        │
        └── instr 2  ─── Buffer copy helper (short-lived)
@@ -491,25 +488,39 @@ No Python or firmware modifications required.
 
 | Control        | Stock Function            | SuperNova Function                      |
 |----------------|---------------------------|-----------------------------------------|
-| Start knob     | Loop offset               | Absolute start position                 |
-| Size knob      | Relative loop size        | Absolute end position                   |
-| Freeze button  | Spectral freeze (latch)   | Momentary (nebconfig change)            |
-| Speed button   | Reset speed / reverse     | Killswitch toggle                       |
-| Source+Freeze  | Grain trigger mode        | One-Shot mode toggle                    |
-| Source+Overlap | Grain size randomizer     | 🔲 Crossfader / LPG Decay              |
-| Source+Reset   | (none)                    | 🔲 Filter type cycling                  |
+| Window knob    | Grain window shape        | Filter parameter (cutoff/morph/crush)   |
+| Freeze button  | Spectral freeze (latch)   | Killswitch (momentary mute)             |
+| Source+Pitch   | Pitch fluctuation         | Chord Grains (Maj7 stacking)            |
+| Source+Size    | Grain panning             | Stereo Widener                          |
+| Source+Density | Grain displacement        | Voice Detune (±50 cent drift)           |
+| Source+Overlap | Grain size randomizer     | Tail Dampener (loop) / LPG (one-shot)   |
+| Source+Window  | Grain muting              | Filter Resonance / Feedback             |
+| Source+Blend   | Granular FM               | Frequency Shifter                       |
+| Source+Freeze  | Grain trigger mode        | One-Shot Mode toggle                    |
+| Source+Reset   | (none)                    | Filter type cycling                     |
+
+### Custom UDOs
+
+| UDO          | Purpose                         | Opcodes Used        |
+|--------------|----------------------------------|---------------------|
+| HilbertIIR   | Manual Hilbert transform         | biquad (6.05 safe)  |
 
 ### Key Technical Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| `a()` wrapping for gap mode grain positions | Prevents k-rate → a-rate amplitude modulation artifacts |
-| Freeze changed to momentary | Required for killswitch toggle behavior via speed button |
-| 40ms clamp window | Below audible gap threshold, long enough for grain content |
-| Quadratic gap scaling | Natural feel — small knob movements = small gaps |
-| Output-stage muting only | Engines keep running, no clicks on gap boundaries |
-| Phasor keeps running when muted | No position jumps on killswitch unmute |
-| Phasor freeze in one-shot idle | No position drift while waiting for trigger |
+| `a()` wrapping for k-rate → a-rate | Prevents amplitude modulation artifacts |
+| Freeze changed to momentary | Required for performative killswitch |
+| Grain window locked to Gaussian | Window knob freed for filter control |
+| Grain muting disabled (krandommask=0) | Window_alt freed for filter resonance |
+| Grain FM disabled | Blend_alt freed for frequency shifter |
+| imax_grains bumped to 20 | Supports dense chord grain textures |
+| 2ms portk on pitch | Rejects Python control layer glitches |
+| Exponential decay for LPG | Natural vactrol-like response curve |
+| Squared LPG filter tracking | Filter closes faster than VCA (292t character) |
+| -6.9078 decay constant | ln(0.001) — reaches -60dB floor precisely |
+| Dual follow2 for tail dampener | Transient-preserving without phase artifacts |
+| Formant + strum tables pre-allocated | Ready for future wiring, zero runtime cost |
 
 ---
 
@@ -535,6 +546,7 @@ is done surgically:
   ✗ Using opcodes not available in Csound ~6.05
   ✗ Wrong filename (UI layer won't show recording LEDs)
   ✗ Modifying Python files (breaks everything, gains nothing)
+  ✗ K-rate staircase into interp (produces bursts, not smooth audio)
 ```
 
 ### Building & Testing

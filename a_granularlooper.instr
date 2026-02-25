@@ -310,6 +310,7 @@ kPlayMode init 0
 kOneShotPlaying init 0
 kOneShotDelay init 0
 kOneShotSrcTrig init 0
+kLPGEnv init 0          ; Buchla 292-style LPG envelope (0=closed, 1=open)
 kPrevFrzAlt init 0
 ; =====================================================================
 ; SUPERNOVA MOD: Multi-Type Filter state
@@ -1120,12 +1121,18 @@ endif
 ; =====================================================================
 ; SUPERNOVA MOD: Play mode output mute
 ; Mode 1 (One-shot): mute when not playing
+; UNLESS LPG is active (Source+Overlap > 0) — then the LPG envelope
+; handles the fade-out naturally, preserving Buchla 292-style decay tail.
 ; =====================================================================
 if kPlayMode == 1 then
-    if kOneShotPlaying == 0 then
-        aoutl = 0
-        aoutr = 0
+    if gkoverlap_alt < 0.005 then
+        ; No LPG — hard mute when not playing (original behavior)
+        if kOneShotPlaying == 0 then
+            aoutl = 0
+            aoutr = 0
+        endif
     endif
+    ; When LPG active: no hard mute here. LPG section handles decay.
 endif
 
 ; =====================================================================
@@ -1494,21 +1501,65 @@ if kWidenRaw > 0.005 then
 endif
 
 ; =====================================================================
-; SUPERNOVA MOD: Tail Dampener / Crossfader (Source+Overlap)
-; Dual-envelope transient preserver: kills sustain tails, keeps attacks.
-; CCW(0) = off (transparent, full natural decay)
-; CW(1) = maximum dampening (attacks punch through, tails fade to null)
+; SUPERNOVA MOD: Source+Overlap — dual behavior based on play mode
 ;
-; How it works:
-;   Fast envelope (10ms release) tracks signal tightly — drops as signal drops.
-;   Slow envelope (release scales with knob) holds recent peaks.
-;   Gain = fast / slow. During attack: both high → gain ≈ 1.0 (no loss).
-;   During tail: fast drops while slow holds → gain → 0 (tail killed).
-;   More crossfade = slower peak hold = bigger contrast = faster tail death.
+; LOOP MODE (kPlayMode 0): Tail Dampener / Crossfader
+;   Dual-envelope transient preserver: kills sustain tails, keeps attacks.
+;   CCW(0) = off (transparent, full natural decay)
+;   CW(1) = maximum dampening (attacks punch through, tails fade to null)
+;
+; ONE-SHOT MODE (kPlayMode 1): Buchla 292t-style Low Pass Gate
+;   Combined VCA + filter envelope triggered by one-shot gate.
+;   CCW(0) = off (hard gate, original one-shot behavior)
+;   CW(1) = long decay (vactrol-style slow close, brightness fades with volume)
+;   The LPG opens instantly on trigger, then decays exponentially.
+;   Filter cutoff tracks amplitude: sound darkens as it fades.
 ; =====================================================================
 kDampAmt portk gkoverlap_alt, 0.01
 
-if kDampAmt > 0.005 then
+if kPlayMode == 1 && kDampAmt > 0.005 then
+    ; =================================================================
+    ; BUCHLA 292t LPG MODE (one-shot only)
+    ; Trigger detection: use actual source/reset triggers (handles re-triggers
+    ; while still playing — kOneShotPlaying stays 1, but we still re-open LPG)
+    ; =================================================================
+    if kOneShotSrcTrig == 1 || kOneShotRstTrig == 1 then
+        kLPGEnv = 1.0
+    endif
+
+    ; Exponential decay — vactrol-style slow close
+    ; Decay time: 50ms (knob CCW) → 5s (knob CW), squared for musical curve
+    kLPGDecayTime = 0.05 + (kDampAmt * kDampAmt * 5.0)
+    kLPGCoeff = exp(-6.9078 / (kLPGDecayTime * kr))
+    kLPGEnv = kLPGEnv * kLPGCoeff
+
+    ; Hard floor: below -60dB snap to zero (no CPU waste on silence)
+    if kLPGEnv < 0.001 then
+        kLPGEnv = 0
+    endif
+
+    ; VCA: amplitude follows envelope directly
+    aoutl = aoutl * a(kLPGEnv)
+    aoutr = aoutr * a(kLPGEnv)
+
+    ; LPG Filter: brightness tracks envelope (squared for faster cutoff drop)
+    ; 292t character: filter closes faster than VCA, darkening the tail
+    kLPGCut = 200 + (kLPGEnv * kLPGEnv * 21800)
+    if kLPGCut < 200 then
+        kLPGCut = 200
+    endif
+    aoutl tonex aoutl, kLPGCut, 2
+    aoutr tonex aoutr, kLPGCut, 2
+
+elseif kDampAmt > 0.005 then
+    ; =================================================================
+    ; TAIL DAMPENER MODE (loop only)
+    ; Dual-envelope transient preserver: kills sustain tails, keeps attacks.
+    ;   Fast envelope (10ms release) tracks signal tightly.
+    ;   Slow envelope (release scales with knob) holds recent peaks.
+    ;   Gain = fast / slow. Attack: both high → 1.0. Tail: fast drops → 0.
+    ; =================================================================
+
     ; Fast envelope: always tight, tracks transients and drops quickly
     aFastL follow2 aoutl, 0.001, 0.010  ; 1ms attack, 10ms release
     aFastR follow2 aoutr, 0.001, 0.010
