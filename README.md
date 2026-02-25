@@ -52,7 +52,7 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
     ✅ Frequency Shifter ──── Hilbert-based bidirectional
     ✅ Stereo Widener ─────── Haas delay + allpass decorrelation
     ✅ Blend Reorder ──────── Live: Dry → Vocoder → Granular 
-    🔲 Absolute Start/End ── Independent start/end positions     
+    🔲 Absolute Start/End ─── Independent start/end positions     
     🔲 Gap Mode ───────────── Morphagene-style rhythmic gaps     
     🔲 Turntable Mode ─────── CDJ jog wheel scrub                
     🔲 Reverb ─────────────── Shimmer + saturation              
