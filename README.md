@@ -586,8 +586,7 @@ is done surgically:
 ```
 
 **SuperNova contributors:**
-- Andy (kuttor) — Direction, testing, feature design
-- Amyl — Lead development, DSP implementation
+- Andy (kuttor)
 
 ---
 
