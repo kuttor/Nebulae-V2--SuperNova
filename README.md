@@ -585,8 +585,8 @@ is done surgically:
                         Performance modifications & extensions
 ```
 
-**SuperNova contributors:**
-- Andy (kuttor)
+**SuperNova Author:**
+- Andrew Kuttor
 
 ---
 
