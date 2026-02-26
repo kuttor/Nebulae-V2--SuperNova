@@ -16,8 +16,6 @@
 > A modified `a_granularlooper.instr` for the Qu-Bit Nebulae v2, focused on
 > **performability**, **audio mangling**, and **not being polite about it**.
 
-Built on [TheTechnobear's enhanced firmware](https://github.com/TheTechnobear/QB_Nebulae_V2/tree/technobear) (v2.2.2).
-
 ---
 
 ## What Is This
@@ -140,15 +138,12 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 ## Installation
 
 ```
-1.  Format USB drive as FAT32
+1.  USB drive as FAT32
 2.  Copy  a_granularlooper.instr  to USB root directory
 3.  Insert USB into Nebulae v2
 4.  Power on (or hold File + tap Source to hot-reload)
 5.  The instrument loads as the default granular looper
 ```
-
-> ⚠️ **Requires TheTechnobear firmware v2.2.2 or compatible fork.**
-> Stock Qu-Bit firmware has not been tested.
 
 > ⚠️ **The filename MUST be `a_granularlooper.instr`** for the UI layer
 > (recording LEDs, file indicators) to function correctly.
