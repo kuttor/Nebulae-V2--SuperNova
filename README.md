@@ -16,8 +16,6 @@
 > A modified `a_granularlooper.instr` for the Qu-Bit Nebulae v2, focused on
 > **performability**, **audio mangling**, and **not being polite about it**.
 
-Built on [TheTechnobear's enhanced firmware](https://github.com/TheTechnobear/QB_Nebulae_V2/tree/technobear) (v2.2.2).
-
 ---
 
 ## What Is This
