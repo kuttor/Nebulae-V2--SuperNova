@@ -1,5 +1,5 @@
 ```
-   _____ __  ______  __________  _   _______ _   ______
+   _____ __  ______  ___________  _   _______ _    _____
   / ___// / / / __ \/ ____/ __ \/ | / / __ \ |  / /   |
   \__ \/ / / / /_/ / __/ / /_/ /  |/ / / / / | / / /| |
  ___/ / /_/ / ____/ /___/ _, _/ /|  / /_/ /| |/ / ___ |
@@ -11,10 +11,12 @@
            ╚═══════════════════════════════════╝
 ```
 
-# SuperNova — Nebulae v2 Performative Buffer Destroyer and Mangler
+# SuperNova — Nebulae v2 Performance Firmware
 
 > A modified `a_granularlooper.instr` for the Qu-Bit Nebulae v2, focused on
 > **performability**, **audio mangling**, and **not being polite about it**.
+
+Built on [TheTechnobear's enhanced firmware](https://github.com/TheTechnobear/QB_Nebulae_V2/tree/technobear) (v2.2.2).
 
 ---
 
@@ -37,28 +39,29 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 ## Feature Overview
 
 ```
-  ───────────────────────────────────────────────────────────────
-                        SUPERNOVA v0.8                             
-                                                        
-    ✅ Killswitch ─────────── Freeze = momentary mute
-    ✅ One-Shot Mode ──────── Trigger-to-play, no looping
-    ✅ LPG Envelope ───────── Buchla 292t on one-shots
-    ✅ Tail Dampener ──────── Transient-preserving crossfader
-    ✅ Chord Grains ───────── Scale-based harmonic pitch stacking
-    ✅ Voice Detune ───────── Supersaw unison spread
-    ✅ 5-Mode Filter ──────── LP / HP / Dual Peak / Crush / Comb
-    ✅ Frequency Shifter ──── Hilbert-based bidirectional
-    ✅ Stereo Widener ─────── Haas delay + allpass decorrelation
-    ✅ Blend Reorder ──────── Live: Dry → Vocoder → Granular 
-    🔲 Absolute Start/End ─── Replacement start/end concept     
-    🔲 Gap Mode ───────────── Morphagene-style rhythmic gaps     
-    🔲 Turntable Mode ─────── CDJ jog wheel scrub                
-    🔲 Reverb ─────────────── Shimmer + saturation              
-    🔲 Strum ──────────────── Grain timing distribution          
-    🔲 Beat Slicing ───────── Rhythmic buffer chopping           
-                                                                 
-    ✅ = implemented   🔲 = planned
-  ─────────────────────────────────────────────────────────────
+ ┌─────────────────────────────────────────────────────────────┐
+ │                    SUPERNOVA v0.8                           │
+ │                                                             │
+ │  ✅ Killswitch ─────────── Freeze = momentary mute          │
+ │  ✅ One-Shot Mode ──────── Trigger-to-play, no looping      │
+ │  ✅ LPG Envelope ───────── Buchla 292t on one-shots         │
+ │  ✅ Tail Dampener ──────── Transient-preserving crossfader  │
+ │  ✅ Chord Grains ───────── Maj7 harmonic pitch stacking     │
+ │  ✅ Voice Detune ───────── Supersaw unison spread           │
+ │  ✅ 5-Mode Filter ──────── LP / HP / Dual Peak / Crush / Comb│
+ │  ✅ Frequency Shifter ──── Hilbert-based bidirectional      │
+ │  ✅ Stereo Widener ─────── Haas delay + allpass decorrelation│
+ │  ✅ Blend Reorder ──────── Live: Dry → Vocoder → Granular   │
+ │                                                             │
+ │  🔲 Absolute Start/End ── Independent start/end positions   │
+ │  🔲 Gap Mode ───────────── Morphagene-style rhythmic gaps   │
+ │  🔲 Turntable Mode ─────── CDJ jog wheel scrub             │
+ │  🔲 Reverb ─────────────── Shimmer + saturation             │
+ │  🔲 Strum ──────────────── Grain timing distribution        │
+ │  🔲 Beat Slicing ───────── Rhythmic buffer chopping         │
+ │                                                             │
+ │  ✅ = implemented   🔲 = planned                            │
+ └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -78,14 +81,14 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
                     └───┬───────────────┬───┘
                         │               │
               ┌─────────▼──────┐ ┌──────▼─────────┐
-              │  PHASE VOCODER │ │    GRANULAR    │
-              │    (mincer)    │ │  (partikkel)   │
-              │                │ │                │
-              │  pitch-shift   │ │  density       │
-              │  time-stretch  │ │  overlap       │
-              │                │ │  chord grains  │
-              │                │ │  voice detune  │
-              └────────┬───────┘ └────────┬───────┘
+              │  PHASE VOCODER │ │    GRANULAR     │
+              │    (mincer)    │ │  (partikkel)    │
+              │                │ │                 │
+              │  pitch-shift   │ │  density        │
+              │  time-stretch  │ │  overlap        │
+              │                │ │  chord grains   │
+              │                │ │  voice detune   │
+              └────────┬───────┘ └────────┬────────┘
                        │                  │
                        │    ┌─────────┐   │
                        └───►│  BLEND  │◄──┘
@@ -137,12 +140,15 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 ## Installation
 
 ```
-1.  Use a USB drive as FAT32
+1.  Format USB drive as FAT32
 2.  Copy  a_granularlooper.instr  to USB root directory
 3.  Insert USB into Nebulae v2
 4.  Power on (or hold File + tap Source to hot-reload)
 5.  The instrument loads as the default granular looper
 ```
+
+> ⚠️ **Requires TheTechnobear firmware v2.2.2 or compatible fork.**
+> Stock Qu-Bit firmware has not been tested.
 
 > ⚠️ **The filename MUST be `a_granularlooper.instr`** for the UI layer
 > (recording LEDs, file indicators) to function correctly.
@@ -158,7 +164,7 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
   │                                                              │
   │    START ●                              ● SIZE               │
   │    Loop start offset     SPEED ◉        Relative loop size   │
-  │    (stock behavior)    ← x4  x1  x4 →  (stock behavior)      │
+  │    (stock behavior)    ← x4  x1  x4 →  (stock behavior)     │
   │                                                              │
   │    DENSITY ●                            ● OVERLAP            │
   │    Grain rate            PITCH ◉        Grain size           │
@@ -295,7 +301,7 @@ Per-voice random pitch drift that stacks with chord intervals.
 ```
   Source+Density:
   CCW(0) = tight unison, no drift
-  CW(1) = ±50 cents per voice, independent slow random drift
+  CW(1) = ±100 cents per voice, independent slow random drift
 ```
 
 Each voice gets its own LFO rate (1.1, 1.7, 2.3 Hz) for organic movement.
@@ -307,13 +313,15 @@ Five filter types cycled forward by tapping Source+Reset (wraps 4→0).
 Window knob controls the primary parameter. Window_alt (Source+Window)
 controls resonance/feedback.
 
-No bypass state — each filter has a transparent position in its knob range.
-Switch to LP and park Window CW for effectively transparent operation.
+**CCW Deadzone:** All filter types bypass completely when Window is fully CCW
+(< 3% travel). Gives a consistent "off" parking spot regardless of mode.
 
 ```
   Type 0: LOWPASS — moogladder 4-pole
           Window: 300Hz (CCW) → 22kHz (CW, transparent)
           Resonance: clean → self-oscillation screaming
+          Pre-filter drive at 2.5x — feeds harmonics into the resonance,
+          gives the moogladder real bite and grit. Not sweet.
 
   Type 1: HIGHPASS — atonex 4-pole + resonant peak (resonx)
           Window: 20Hz (CCW, transparent) → 8kHz (CW)
@@ -342,26 +350,30 @@ Bidirectional frequency shift via manual Hilbert transform (biquad allpass netwo
 ```
   Source+Blend:
   CCW(0.0) = -1000 Hz (down shift, 2x range)
-  Noon(0.5) = bypass (hard ±2Hz deadzone)
+  Noon(0.5) = bypass (hard ±8Hz deadzone)
   CW(1.0)  = +500 Hz (up shift)
 ```
 
-Default alt value is 0.5 (bypass). The asymmetric range gives more downshift
-headroom — down-shifting is musically more useful and less likely to alias.
+Default alt value is 0.5 (bypass). Deadzone widened to ±8Hz with smooth
+wet/dry ramp (reaches full wet at ~30Hz). The asymmetric range gives more
+downshift headroom — down-shifting is musically more useful.
 
 ### Stereo Widener (Source+Size)
 
-Haas delay + allpass decorrelation for genuine mono→stereo widening.
+Mono-first stereo decorrelation. Processes BOTH channels differently:
+L gets allpass phase shift + micro chorus, R gets Haas delay + allpass.
+Even pure mono input gets genuine stereo spread.
 
 ```
   Source+Size:
   CCW(0) = off (mono-compatible)
-  CW(1) = max spread (25ms Haas + allpass phase scramble)
+  CW(1) = max spread (40ms Haas on R + allpass + chorus on L)
 ```
 
-Slow LFO modulation (0.25 Hz) prevents static comb filtering. Gentle warmth
-filter (tonex 12kHz) on the widened channel prevents harshness. Capped at
-90% wet to maintain center image stability.
+L channel is subtler (60% mix) to preserve center image stability.
+R channel gets the full Haas treatment for dramatic width. Both channels
+get LFO modulation at different rates (0.37Hz L, 0.19Hz R) to prevent
+static comb filtering.
 
 ### Blend Reorder (Live Mode)
 
@@ -508,8 +520,14 @@ No Python or firmware modifications required.
 | Grain window locked to Gaussian | Window knob freed for filter control |
 | Grain muting disabled (krandommask=0) | Window_alt freed for filter resonance |
 | Grain FM disabled | Blend_alt freed for frequency shifter |
+| Grain RMS cap at 0.45 (was 0.20) | Matches vocoder output level, smooth blend |
 | imax_grains bumped to 20 | Supports dense chord grain textures |
 | 2ms portk on pitch | Rejects Python control layer glitches |
+| LP drive at 2.5x tanh | Feeds harmonics into moogladder, not sweet |
+| CCW deadzone on all filter types | Consistent "off" parking spot at full CCW |
+| Freq shifter ±8Hz deadzone | Wider safe zone, smoother wet/dry ramp |
+| Voice detune ±100 cents max | Doubled from ±50 for obvious supersaw effect |
+| Stereo widener processes L+R | Both channels decorrelated for mono sources |
 | Exponential decay for LPG | Natural vactrol-like response curve |
 | Squared LPG filter tracking | Filter closes faster than VCA (292t character) |
 | -6.9078 decay constant | ln(0.001) — reaches -60dB floor precisely |
@@ -580,8 +598,9 @@ is done surgically:
                         Performance modifications & extensions
 ```
 
-**SuperNova Author:**
-- Andrew Kuttor
+**SuperNova contributors:**
+- Andy (kuttor) — Direction, testing, feature design
+- Amyl — Lead development, DSP implementation
 
 ---
 

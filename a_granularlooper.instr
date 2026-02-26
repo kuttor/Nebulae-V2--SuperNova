@@ -653,16 +653,16 @@ tablew 0, 4, giChordMix     ; trainlet always off
 ; SUPERNOVA MOD: Voice Detune (Source+Density = per-voice pitch spread)
 ; gkdensity_alt controls random detune spread per chord voice:
 ;   CCW(0) = tight unison, no detune (clean, original behavior)
-;   CW(1) = wide detune ±50 cents per voice (super-saw, thick, lush)
+;   CW(1) = wide detune ±100 cents per voice (super-saw, thick, obvious)
 ; Each voice gets slow, independent random pitch drift.
 ; Stacks with chord intervals from Source+Pitch — detuned chords = thicc.
 ; When chord is off (all unison), detune alone = supersaw unison texture.
 ; =====================================================================
-kDetuneCents = gkdensity_alt * 50  ; 0→50 cents max spread
+kDetuneCents = gkdensity_alt * 100  ; 0→100 cents max spread (doubled from 50)
 ; Independent slow drift per voice (different rates = organic movement)
-kDet2 randi kDetuneCents, 1.7
-kDet3 randi kDetuneCents, 2.3
-kDet4 randi kDetuneCents, 1.1
+kDet2 randi kDetuneCents, 2.3
+kDet3 randi kDetuneCents, 3.1
+kDet4 randi kDetuneCents, 1.7
 
 ; Grain distribution: periodic (no strum)
 kdistribution = 0
@@ -1029,11 +1029,15 @@ kgrainrmsR rms agrainR
 ;acompL max acompensationL, a(0.5)
 ;acompR max acompensationR, a(0.5)
 
-if kgrainrmsL > 0.20 then
-    kgrainrmsL = 0.20
+; SUPERNOVA FIX: RMS cap raised from 0.20 to 0.45 to match vocoder output level.
+; Stock 0.20 cap caused massive grain volume loss vs vocoder — blend sounded
+; like a switch because grains were ~4x quieter. At 0.45 the auto-leveler
+; still prevents clipping at high density but grains blend smoothly with vocoder.
+if kgrainrmsL > 0.45 then
+    kgrainrmsL = 0.45
 endif
-if kgrainrmsR > 0.20 then
-    kgrainrmsR = 0.20
+if kgrainrmsR > 0.45 then
+    kgrainrmsR = 0.45
 endif
 
 agrainCompL gain agrainL, kgrainrmsL, 10
@@ -1162,6 +1166,10 @@ kResonance portk gkwindow_alt, 0.005
 
 ; =================================================================
 ; =================================================================
+; CCW DEADZONE: kFilterPos < 0.03 = bypass all filter types.
+; Consistent "off" parking spot at full CCW for every mode.
+; =================================================================
+if kFilterPos > 0.03 then
 ; FILTER TYPE 0: LOWPASS — moogladder 4-pole
 ; Window CW = 22kHz (transparent), CCW = 300Hz (dark but always alive)
 ; Exponential curve: smooth log sweep across entire knob range
@@ -1178,9 +1186,11 @@ if kFilterType == 0 then
     endif
     kMoogRes = kResonance * 0.95
 
-    ; Pre-filter saturation: mild overdrive feeds moogladder harmonics
-    aoutl = tanh(aoutl * 1.3)
-    aoutr = tanh(aoutr * 1.3)
+    ; Pre-filter saturation: hard overdrive feeds moogladder harmonics
+    ; Drive at 2.5 pushes real harmonic content into the resonance peak.
+    ; At input ~1.0: tanh(2.5) = 0.99 — heavy clipping, rich overtones.
+    aoutl = tanh(aoutl * 2.5)
+    aoutr = tanh(aoutr * 2.5)
 
     aoutl moogladder aoutl, kFilterCutLP, kMoogRes
     aoutr moogladder aoutr, kFilterCutLP, kMoogRes
@@ -1411,6 +1421,7 @@ elseif kFilterType == 4 then
     aoutl = tanh(aoutl)
     aoutr = tanh(aoutr)
 endif
+endif ; CCW deadzone bypass
 
 ; =====================================================================
 ; SUPERNOVA MOD: Frequency Shifter (Source+Blend) + Stereo Width (Source+Size)
@@ -1437,8 +1448,8 @@ else
 endif
 kFShiftHz portk kFShiftTarget, 0.02
 
-; Hard deadzone: ±2Hz = pure bypass
-if abs(kFShiftHz) < 2 then
+; Hard deadzone: ±8Hz = pure bypass (widened from ±2Hz per tester feedback)
+if abs(kFShiftHz) < 8 then
     kFShiftHz = 0
 endif
 
@@ -1454,11 +1465,12 @@ aModSin oscil 1, kFShiftHz, giSine
 aFShiftL = aHilIL * aModCos - aHilQL * aModSin
 aFShiftR = aHilIR * aModCos - aHilQR * aModSin
 
-; Wet/dry: hard bypass in deadzone
+; Wet/dry: hard bypass in deadzone, gentle ramp in from 8Hz
+; Reaches full wet at ~30Hz shift — smooth transition, no sudden jump
 if kFShiftHz == 0 then
     kFShiftWet = 0
 else
-    kFShiftWet = abs(kFShiftHz) * 0.1
+    kFShiftWet = abs(kFShiftHz) / 30
     if kFShiftWet > 1 then
         kFShiftWet = 1
     endif
@@ -1466,26 +1478,42 @@ endif
 aoutl = aoutl * (1 - kFShiftWet) + aFShiftL * kFShiftWet
 aoutr = aoutr * (1 - kFShiftWet) + aFShiftR * kFShiftWet
 
-; --- Stereo Widening (Source+Size) — Allpass decorrelation ---
-; Phase-shifted R channel + Haas delay for genuine mono→stereo widening.
-; Haas delay is the primary widener — proven, effective, immediate.
-; Allpass decorrelation on top for extra phase scramble.
-; LFO modulation prevents static comb filtering artifacts.
+; --- Stereo Widening (Source+Size) — Mono-first decorrelation ---
+; Designed for mono sources: processes BOTH L and R differently.
+; L: allpass phase shift + micro chorus (subtle, preserves center image)
+; R: Haas delay + allpass (creates the width)
+; Result: even pure mono input gets genuine stereo spread.
 ; CCW(0) = mono (L=R), CW(1) = max stereo spread
 kWidenRaw = gkloopsize_alt  ; 0 = off, 1 = max spread
 
 if kWidenRaw > 0.005 then
-    ; Haas delay on R: creates immediate stereo perception from mono
-    ; Even 3ms of L/R offset creates noticeable width
-    kHaasBase = 3 + (kWidenRaw * 22)  ; 3→25ms
+    ; ── L channel: allpass decorrelation + micro chorus ──
+    ; Different allpass coefficients from R — phase spectra diverge.
+    ; Chorus adds timbral variation L≠R even on identical input.
+    kWidenL = kWidenRaw * 0.6  ; L is subtler (preserves center image)
+    aWidenL biquad aoutl, -0.87, 1, 0, 1, -0.87, 0
+    aWidenL biquad aWidenL, -0.53, 1, 0, 1, -0.53, 0
 
-    ; Slow modulation prevents static comb filtering
-    aHaasLfo oscil kWidenRaw * 1.5, 0.25, giSine
+    ; Micro chorus on L: ±0.5ms pitch drift at 0.37Hz
+    aLfoL oscil kWidenRaw * 0.5, 0.37, giSine
+    aChorusTimeL = a(1.5) + aLfoL
+    aChorusTimeL max aChorusTimeL, a(0.1)
+    aWidenL vdelay aWidenL, aChorusTimeL, 5
+
+    ; L gets progressively decorrelated
+    aoutl = aoutl * (1 - kWidenL) + aWidenL * kWidenL
+
+    ; ── R channel: Haas delay + allpass (bigger, more obvious) ──
+    ; Increased range: 5→40ms (was 3→25ms) for more dramatic width
+    kHaasBase = 5 + (kWidenRaw * 35)
+
+    ; Slow modulation prevents static comb filtering (different rate from L)
+    aHaasLfo oscil kWidenRaw * 2.0, 0.19, giSine
     aHaasTime = a(kHaasBase) + aHaasLfo
     aHaasTime max aHaasTime, a(0.5)
 
     ; Delayed + allpass-decorrelated R channel
-    aWidenR vdelay aoutr, aHaasTime, 30
+    aWidenR vdelay aoutr, aHaasTime, 50
     aWidenR biquad aWidenR, -0.97, 1, 0, 1, -0.97, 0
     aWidenR biquad aWidenR, -0.69, 1, 0, 1, -0.69, 0
 
