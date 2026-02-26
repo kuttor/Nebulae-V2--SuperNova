@@ -146,9 +146,6 @@ Your Nebulae stays intact. Drop it on USB. Load it. Go.
 5.  The instrument loads as the default granular looper
 ```
 
-> ⚠️ **Requires TheTechnobear firmware v2.2.2 or compatible fork.**
-> Stock Qu-Bit firmware has not been tested.
-
 > ⚠️ **The filename MUST be `a_granularlooper.instr`** for the UI layer
 > (recording LEDs, file indicators) to function correctly.
 
