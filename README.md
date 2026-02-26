@@ -593,9 +593,8 @@ is done surgically:
                         Performance modifications & extensions
 ```
 
-**SuperNova contributors:**
-- Andy (kuttor) — Direction, testing, feature design
-- Amyl — Lead development, DSP implementation
+**SuperNova Author:**
+- AndyKuttor — Direction, testing, feature design
 
 ---
 
