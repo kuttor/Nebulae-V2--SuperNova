@@ -11,7 +11,7 @@
            ╚═══════════════════════════════════╝
 ```
 
-# SuperNova — Nebulae v2 Performance buffer Destroyer and Mangler
+# SuperNova — Nebulae v2 Performanative Buffer Destroyer and Mangler
 
 > A modified `a_granularlooper.instr` for the Qu-Bit Nebulae v2, focused on
 > **performability**, **audio mangling**, and **not being polite about it**.
